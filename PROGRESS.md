@@ -95,14 +95,25 @@
     - Actual request body size enforcement on streaming payloads and spoofed Content-Length defense
     - Upstream GitHub API response payload cap enforcement (>5MB tree safety cap)
     - Planner malicious and ungrounded file path dropping (and positive retention of valid paths)
-- **Frontend Production Build:** `npm run build` completed cleanly (TypeScript compiled and Vite packaged in 634ms, zero errors, bundle size 163.04 kB).
-- **Docker Compose Production Verification (Revised Network & Digest Pinning):**
-  - Base images pinned to immutable digests (`sha256:...`) and built cleanly.
-  - Backend port 8000 isolated; host connection refused/timed out on port 8000.
-  - Frontend port 3000 acts as exclusive ingress gateway.
-  - Live anti-spoofing test passed: 65 requests with rotating spoofed IPs correctly throttled at request 61 with HTTP 429.
-  - Container security: backend runs as `appuser` (10001), frontend runs as `nginx` (101), zero `.env` or secrets in image layers.
-  - Clean shutdown: `docker compose down` verified cleanly stopping and removing containers and networks.
+- **Backend Pytest Suite:** 86 passed in 2.54s (`pytest backend/tests/ -v`).
+  - Added schema compatibility and numeric range constraint tests in `test_provider.py`.
+  - Added bounded 3-attempt transient error retry tests with progressive backoff.
+- **Frontend Production Build:** `npm run build` completed cleanly (TypeScript compiled and Vite packaged in 549ms, zero errors, bundle size 163.04 kB).
+- **Gemma 4 Live Provider Investigation & Hardening Findings:**
+  - Diagnosed that `ge=0, le=100` numeric constraints on Pydantic schemas translate to `minimum`/`maximum` in OpenAPI schemas, triggering server-side grammar compiler errors (`500 INTERNAL`) on `models/gemma-4-31b-it`. Replaced with clean integer fields and local Pydantic `@field_validator` clamping.
+  - Strongly typed `PlanModelOutput` schema with `PlanStepItem` and `GuidanceItem`, eliminating unsupported `additionalProperties` error.
+  - Added bounded 3-attempt retry loop with progressive backoff (`[2.0s, 4.0s]`) for transient 500/503 server errors.
+  - Final live verification: Smaller candidate batches (3–4 candidates) succeed when the provider is healthy. Under full batched loads and during peak traffic, `models/gemma-4-31b-it` on the Gemini Developer API persistently encounters upstream service unavailability (`503 UNAVAILABLE`) and server internal errors (`500 INTERNAL`).
+  - Strict fallback invariant confirmed: When Gemma 4 inference is unavailable or errors, PatchLoom honestly marks `ai_status: "unavailable_or_invalid"`, does not disguise fallback scores as AI results, and reliably renders 100% of deterministic GitHub viability signals and grounded files.
+- **Judge-Ready README.md Upgrade:**
+  - Rewrote README.md covering problem/solution, Gemma 4 role, Docker Compose architecture with Mermaid diagrams, 60-second quickstart, epistemic evidence labeling, offline fixture mode, and test verification.
+- **Pre-Submission Secret Audit (Zero Real Leaks):**
+  - Scanned all 60 tracked files across backend, frontend, fixtures, and docs: zero real API keys, PATs, or credentials found.
+  - Scanned full Git history across all commits: confirmed `.env` was never committed and no real secrets exist in historical revisions.
+  - Replaced high-entropy synthetic test fixtures in `backend/tests/test_hardening.py` with zero-entropy concatenated strings (`"AIzaSy" + "0" * 33`, `"ghp_" + "0" * 36`, etc.) to prevent false-positive alarms on external scanners while fully preserving regex redaction regression tests.
+  - Confirmed `.env` is safely ignored by `.gitignore` (`.gitignore:2:.env`) and excluded by `.dockerignore` (`.dockerignore:11:.env`). `.env.example` contains only non-secret placeholders.
+
+
 
 
 

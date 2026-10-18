@@ -151,28 +151,28 @@ async def test_docs_csp_allows_swagger_assets():
 
 def test_redact_sensitive_string_tokens_and_keys():
     """Verify redaction of Google keys, GitHub PATs, and Bearer tokens."""
-    # Google AI Studio / Gemini key format
-    text_with_gemini = "Error calling API with key AIzaSyA1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6Q"
+    # Google AI Studio / Gemini key format (unmistakably fake synthetic test string)
+    text_with_gemini = "Error calling API with key " + "AIzaSy" + "0" * 33
     redacted_gemini = redact_sensitive_string(text_with_gemini)
     assert "AIzaSy" not in redacted_gemini
     assert "[REDACTED_API_KEY]" in redacted_gemini
 
-    # GitHub classic PAT
-    text_with_ghp = "Git authorization failed: ghp_1234567890abcdefghijklmnopqrstuvwxyz"
+    # GitHub classic PAT (unmistakably fake synthetic test string)
+    text_with_ghp = "Git authorization failed: " + "ghp_" + "0" * 36
     redacted_ghp = redact_sensitive_string(text_with_ghp)
     assert "ghp_" not in redacted_ghp
     assert "[REDACTED_GITHUB_TOKEN]" in redacted_ghp
 
-    # GitHub fine-grained PAT
-    text_with_pat = "github_pat_11AABCDEF0123456789_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ123456"
+    # GitHub fine-grained PAT (unmistakably fake synthetic test string)
+    text_with_pat = "Git failure: " + "github_pat_" + "0" * 50
     redacted_pat = redact_sensitive_string(text_with_pat)
     assert "github_pat_" not in redacted_pat
     assert "[REDACTED_GITHUB_PAT]" in redacted_pat
 
-    # Authorization Bearer token
-    text_with_bearer = "Sending request with Authorization: Bearer secret_access_token_value_xyz"
+    # Authorization Bearer token (unmistakably fake synthetic test string)
+    text_with_bearer = "Sending request with Authorization: Bearer fake_access_token_value_xyz"
     redacted_bearer = redact_sensitive_string(text_with_bearer)
-    assert "secret_access_token" not in redacted_bearer
+    assert "fake_access_token" not in redacted_bearer
     assert "Bearer [REDACTED_TOKEN]" in redacted_bearer
 
 
@@ -184,7 +184,7 @@ def test_logging_filter_redacts_record_message():
         level=logging.ERROR,
         pathname=__file__,
         lineno=10,
-        msg="Failed with token: ghp_111122223333444455556666777788889999",
+        msg="Failed with token: " + "ghp_" + "0" * 36,
         args=(),
         exc_info=None,
     )

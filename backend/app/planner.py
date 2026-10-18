@@ -269,20 +269,21 @@ async def generate_first_pr_plan(
     dropped_paths_across_plan: list[str] = []
 
     for raw_step in plan_output.steps:
-        raw_files = raw_step.get("files") or []
+        step_dict = raw_step.model_dump() if hasattr(raw_step, "model_dump") else (raw_step if isinstance(raw_step, dict) else {})
+        raw_files = step_dict.get("files") or []
         grounded_files = [f for f in raw_files if f in valid_paths_set]
         dropped_files = [f for f in raw_files if f not in valid_paths_set]
         if dropped_files:
             dropped_paths_across_plan.extend(dropped_files)
 
-        kind_val = raw_step.get("kind", "inference")
+        kind_val = step_dict.get("kind", "inference")
         if kind_val not in ("verified", "inference"):
             kind_val = "inference"
 
         grounded_steps.append(
             PlanStep(
-                title=str(raw_step.get("title", "Implementation Step")),
-                detail=str(raw_step.get("detail", "")),
+                title=str(step_dict.get("title", "Implementation Step")),
+                detail=str(step_dict.get("detail", "")),
                 kind=kind_val,
                 files=grounded_files,
             )
@@ -305,20 +306,22 @@ async def generate_first_pr_plan(
         ]
 
     # Map setup and test notes
-    setup_status = plan_output.setup_guidance.get("status", "unknown")
+    setup_dict = plan_output.setup_guidance.model_dump() if hasattr(plan_output.setup_guidance, "model_dump") else (plan_output.setup_guidance if isinstance(plan_output.setup_guidance, dict) else {})
+    setup_status = setup_dict.get("status", "unknown")
     if setup_status not in ("verified", "unknown", "inference"):
         setup_status = "unknown"
     setup_note = PlanNote(
         status=setup_status,
-        notes=plan_output.setup_guidance.get("notes", "No setup instructions found in documentation."),
+        notes=setup_dict.get("notes", "No setup instructions found in documentation."),
     )
 
-    test_status = plan_output.test_guidance.get("status", "unknown")
+    test_dict = plan_output.test_guidance.model_dump() if hasattr(plan_output.test_guidance, "model_dump") else (plan_output.test_guidance if isinstance(plan_output.test_guidance, dict) else {})
+    test_status = test_dict.get("status", "unknown")
     if test_status not in ("verified", "unknown", "inference"):
         test_status = "unknown"
     test_note = PlanNote(
         status=test_status,
-        notes=plan_output.test_guidance.get("notes", "No test instructions found in documentation."),
+        notes=test_dict.get("notes", "No test instructions found in documentation."),
     )
 
     return PlanResponse(

@@ -76,6 +76,7 @@ class GeminiProvider(ModelProvider):
                 return await self._call_model(
                     client=client,
                     model_id=model_id,
+                    task_name=task_name,
                     system_instruction=system_instruction,
                     user_prompt=user_prompt,
                     output_schema=output_schema,
@@ -97,6 +98,7 @@ class GeminiProvider(ModelProvider):
         self,
         client: genai.Client,
         model_id: str,
+        task_name: str,
         system_instruction: Optional[str],
         user_prompt: str,
         output_schema: Type[BaseModel],
@@ -116,46 +118,64 @@ class GeminiProvider(ModelProvider):
             "response_mime_type": "application/json",
             "response_schema": output_schema,
             "temperature": 0.1,
+            "max_output_tokens": 4096,
         }
 
-        try:
-            async with asyncio.timeout(timeout_seconds):
-                response = await client.aio.models.generate_content(
-                    model=model_id,
-                    contents=combined_prompt,
-                    config=config,
-                )
-        except TimeoutError:
-            raise ModelTimeoutError(f"Model generation timed out after {timeout_seconds} seconds")
-        except genai_errors.ClientError as exc:
-            msg = str(exc)
-            status_code = getattr(exc, "code", None)
-            if status_code in (401, 403) or "API_KEY_INVALID" in msg or "PERMISSION_DENIED" in msg:
-                raise AuthenticationError("Invalid or unauthorized GEMINI_API_KEY") from exc
-            if status_code == 429 or "RESOURCE_EXHAUSTED" in msg or "quota" in msg.lower():
-                raise QuotaExceededError("Gemini API rate limit or quota exhausted") from exc
-            if status_code == 404 or "NOT_FOUND" in msg or "is not found" in msg.lower():
-                raise ModelNotFoundError(f"Model '{model_id}' was not found on the Gemini API") from exc
-            if "SAFETY" in msg or "BLOCKED" in msg:
-                raise SafetyBlockedError("Model request was blocked by safety guidelines") from exc
-            # If 400 with unsupported response_schema or system_instruction, attempt prompt-based JSON mode
-            if status_code == 400 and ("response_schema" in msg or "system_instruction" in msg or "schema" in msg):
-                return await self._fallback_prompt_mode(
-                    client=client,
-                    model_id=model_id,
-                    system_instruction=system_instruction,
-                    user_prompt=user_prompt,
-                    output_schema=output_schema,
-                    timeout_seconds=timeout_seconds,
-                )
-            raise ModelProviderError(f"Gemini API client error: {msg}") from exc
-        except genai_errors.APIError as exc:
-            msg = str(exc)
-            if "RESOURCE_EXHAUSTED" in msg:
-                raise QuotaExceededError("Gemini API quota exhausted") from exc
-            raise ModelProviderError(f"Gemini API error: {msg}") from exc
-        except Exception as exc:
-            raise ModelProviderError(f"Unexpected provider error: {exc}") from exc
+        max_transient_attempts = 3
+        backoff_delays = [2.0, 4.0]
+        response = None
+        for t_attempt in range(max_transient_attempts):
+            try:
+                async with asyncio.timeout(timeout_seconds):
+                    response = await client.aio.models.generate_content(
+                        model=model_id,
+                        contents=combined_prompt,
+                        config=config,
+                    )
+                break
+            except TimeoutError:
+                raise ModelTimeoutError(f"Model generation timed out after {timeout_seconds} seconds")
+            except genai_errors.ClientError as exc:
+                msg = str(exc)
+                status_code = getattr(exc, "code", None)
+                if status_code in (401, 403) or "API_KEY_INVALID" in msg or "PERMISSION_DENIED" in msg:
+                    raise AuthenticationError("Invalid or unauthorized GEMINI_API_KEY") from exc
+                if status_code == 429 or "RESOURCE_EXHAUSTED" in msg or "quota" in msg.lower():
+                    raise QuotaExceededError("Gemini API rate limit or quota exhausted") from exc
+                if status_code == 404 or "NOT_FOUND" in msg or "is not found" in msg.lower():
+                    raise ModelNotFoundError(f"Model '{model_id}' was not found on the Gemini API") from exc
+                if "SAFETY" in msg or "BLOCKED" in msg:
+                    raise SafetyBlockedError("Model request was blocked by safety guidelines") from exc
+                # If 400 with unsupported response_schema or system_instruction, attempt prompt-based JSON mode
+                if status_code == 400 and ("response_schema" in msg or "system_instruction" in msg or "schema" in msg):
+                    return await self._fallback_prompt_mode(
+                        client=client,
+                        model_id=model_id,
+                        system_instruction=system_instruction,
+                        user_prompt=user_prompt,
+                        output_schema=output_schema,
+                        timeout_seconds=timeout_seconds,
+                    )
+                raise ModelProviderError(f"Gemini API client error: {msg}") from exc
+            except genai_errors.APIError as exc:
+                msg = str(exc)
+                status_code = getattr(exc, "code", None)
+                if "RESOURCE_EXHAUSTED" in msg or status_code == 429:
+                    raise QuotaExceededError("Gemini API quota exhausted") from exc
+                if status_code in (500, 503) and t_attempt < max_transient_attempts - 1:
+                    delay = backoff_delays[t_attempt] if t_attempt < len(backoff_delays) else 4.0
+                    logger.warning(
+                        "Transient Gemini API error %s during %s on '%s' (attempt %d/%d). Retrying in %.1fs...",
+                        status_code, task_name, model_id, t_attempt + 1, max_transient_attempts, delay,
+                    )
+                    await asyncio.sleep(delay)
+                    continue
+                raise ModelProviderError(f"Gemini API error ({status_code or '5xx'}): {msg}") from exc
+            except Exception as exc:
+                raise ModelProviderError(f"Unexpected provider error: {exc}") from exc
+
+        if response is None:
+            raise ModelProviderError(f"No response received from model '{model_id}'")
 
         # Parse and validate response
         return self._parse_and_validate(response, output_schema, model_id)

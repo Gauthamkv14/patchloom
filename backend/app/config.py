@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     REQUEST_TIMEOUT_SECONDS: int = Field(default=20)
     MODEL_TIMEOUT_SECONDS: int = Field(default=60)
     MAX_PROMPT_CHARS: int = Field(default=60000)
-    MAX_CANDIDATES: int = Field(default=12)
+    MAX_CANDIDATES: int = Field(default=6)
     MAX_CONCURRENT_MODEL_REQUESTS: int = Field(default=2)
     MAX_REQUEST_BODY_BYTES: int = Field(default=32768)
     ANALYZE_RATE_LIMIT: str = Field(default="10/10minutes")
