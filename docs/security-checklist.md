@@ -20,6 +20,14 @@ This document details the defensive safeguards, automated test evidence, and ope
 | **10** | **Epistemic Provenance Integrity** | Verified GitHub facts and model inferences are strictly bifurcated in schemas and UI. Incomplete lookups yield `unknown` or `none_detected`, never a verified negative. | `test_signals.py::test_linked_pr_penalties`, `test_fixtures.py::test_fixture_analysis_scenario_b_partial_evidence` | **Verified** |
 | **11** | **Deterministic Error Fallback** | Non-retryable provider errors (`QuotaExceededError`, `AuthenticationError`, `ModelTimeoutError`) never retry blindly; they fall back immediately to deterministic heuristic scoring and plans. | `test_analysis.py::test_quota_failure_never_retries`, `test_planner.py::test_generate_plan_fallback_on_provider_quota_error` | **Verified** |
 | **12** | **Safe UI Rendering** | Plain text rendering in React JSX with high-contrast badge indicators. **Zero use of `dangerouslySetInnerHTML`** or unsanitized markdown renderers. | Verified by frontend TypeScript compilation & code inspection | **Verified** |
+| **13** | **Upstream Response Caps** | Strict byte caps on upstream GitHub API payloads (`MAX_TREE_PAYLOAD_BYTES = 5MB`, `MAX_DOC_PAYLOAD_BYTES = 512KB`) preventing upstream memory exhaustion attacks. | `test_hardening.py::test_github_client_tree_payload_safety_cap` | **Verified** |
+| **14** | **Delimiter Smuggling Defense** | `sanitize_untrusted_text` strips and defangs XML breakout tags (`</untrusted_...>`, `<untrusted_...>`) in all untrusted repository data before prompt assembly. | `test_hardening.py::test_sanitize_untrusted_text_defangs_delimiter_smuggling` | **Verified** |
+| **15** | **Chunked Transfer Rejection** | Body limiter middleware strictly rejects `Transfer-Encoding: chunked` requests lacking Content-Length to prevent unbounded streaming memory attacks. | `test_hardening.py::test_chunked_transfer_encoding_rejected` | **Verified** |
+| **16** | **Container Non-Root Security** | Backend runs as non-root user `appuser` (UID 10001); frontend Nginx runs as non-root user `nginx` (UID 101). Containers strictly bind to unprivileged ports. | Verified via `docker compose exec whoami` | **Verified** |
+| **17** | **Container Secret Exclusion** | Root `.dockerignore` excludes `.env*`, `.git`, `.venv`, `node_modules`, and test caches. Image layer history inspection confirms zero credentials baked into images. | Verified via `docker history` and container filesystem search | **Verified** |
+| **18** | **Targeted Proxy Network Trust** | `TRUSTED_PROXIES` is strictly restricted to the specific frontend container IP (`172.28.0.10`) on dedicated subnet `172.28.0.0/24`, eliminating broad private CIDRs (`172.16.0.0/12`, `10.0.0.0/8`). | `test_hardening.py::test_client_ip_prefers_x_real_ip_from_trusted_proxy`, `docker-compose.yml` inspection | **Verified** |
+| **19** | **Host Network Isolation** | Backend port 8000 is internal (`expose: ["8000"]`) and never published to host interfaces. All ingress flows strictly through the frontend gateway on port 3000. | Verified via socket connection failure on host port 8000 | **Verified** |
+| **20** | **Forwarded Header Sanitization** | Edge Nginx proxy overwrites incoming `X-Forwarded-For` and `X-Real-IP` with `$remote_addr`. Backend ignores forwarded headers from any untrusted peer. Rate limiter keyed strictly by verified client IP. | `test_hardening.py::test_client_ip_ignores_x_real_ip_from_untrusted_peer` & Live 65-request spoof test | **Verified** |
 
 ---
 
@@ -27,7 +35,7 @@ This document details the defensive safeguards, automated test evidence, and ope
 
 - `GEMINI_API_KEY` and `GITHUB_TOKEN` are loaded exclusively into backend memory via `backend/app/config.py`.
 - No credentials exist in client-side bundles, Vite environment variables (`VITE_*`), or HTTP response payloads.
-- `.env` is covered by `.gitignore`. `.env.example` contains safe placeholders only.
+- `.env` is covered by `.gitignore` and `.dockerignore`. `.env.example` contains safe placeholders only.
 - Automated tests run 100% offline without live API credentials.
 
 ---
@@ -39,7 +47,7 @@ This document details the defensive safeguards, automated test evidence, and ope
    - *Limitation:* Does not coordinate limits across multiple horizontally scaled backend instances.
    - *Production Roadmap:* In production (100× scale), replace with a distributed Redis-backed rate limiter.
 2. **Reverse Proxy Trust Configuration:**
-   - *Current Implementation:* `settings.TRUSTED_PROXIES` defaults to `[]`, completely ignoring `X-Forwarded-For`.
+   - *Current Implementation:* `settings.TRUSTED_PROXIES` defaults to `[]`, completely ignoring `X-Forwarded-For`. Supports CIDR blocks when deployed behind container networks or load balancers.
    - *Deployment Requirement:* If deploying behind Cloudflare, Render, or AWS ALB, the operator must explicitly configure `TRUSTED_PROXIES` in `.env` with the upstream proxy CIDRs.
 3. **Public Repositories Only:**
    - *Design Scope:* PatchLoom intentionally does not support private repositories or OAuth contributor write tokens, eliminating the risk of unauthorized write actions or private data leakage.

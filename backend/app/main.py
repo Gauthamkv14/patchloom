@@ -70,16 +70,59 @@ async def add_security_headers(request: Request, call_next):
 @app.middleware("http")
 async def limit_request_body_size(request: Request, call_next):
     """Enforce maximum request body size guardrail."""
-    content_length = request.headers.get("content-length")
-    if content_length and int(content_length) > settings.MAX_REQUEST_BODY_BYTES:
+    transfer_encoding = request.headers.get("transfer-encoding", "").lower()
+    if "chunked" in transfer_encoding:
         return JSONResponse(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            status_code=status.HTTP_400_BAD_REQUEST,
             content={
-                "error": "Payload Too Large",
-                "detail": f"Request body exceeds {settings.MAX_REQUEST_BODY_BYTES} bytes limit",
+                "error": "Bad Request",
+                "detail": "Chunked transfer encoding is not supported. Please supply a valid Content-Length.",
                 "request_id": str(uuid.uuid4()),
             },
         )
+
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            length = int(content_length)
+            if length > settings.MAX_REQUEST_BODY_BYTES:
+                return JSONResponse(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    content={
+                        "error": "Payload Too Large",
+                        "detail": f"Request body exceeds {settings.MAX_REQUEST_BODY_BYTES} bytes limit",
+                        "request_id": str(uuid.uuid4()),
+                    },
+                )
+        except ValueError:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={
+                    "error": "Bad Request",
+                    "detail": "Invalid Content-Length header.",
+                    "request_id": str(uuid.uuid4()),
+                },
+            )
+
+    # For mutating requests with bodies, enforce the hard limit on actual received bytes
+    # to protect against fabricated/spoofed Content-Length or streaming bodies.
+    if request.method in ("POST", "PUT", "PATCH"):
+        bytes_received = 0
+        chunks = []
+        async for chunk in request.stream():
+            bytes_received += len(chunk)
+            if bytes_received > settings.MAX_REQUEST_BODY_BYTES:
+                return JSONResponse(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    content={
+                        "error": "Payload Too Large",
+                        "detail": f"Request body exceeds {settings.MAX_REQUEST_BODY_BYTES} bytes limit",
+                        "request_id": str(uuid.uuid4()),
+                    },
+                )
+            chunks.append(chunk)
+        request._body = b"".join(chunks)
+
     return await call_next(request)
 
 

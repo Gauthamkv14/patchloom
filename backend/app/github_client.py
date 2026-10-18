@@ -336,7 +336,7 @@ class GitHubClient:
         async with self._create_http_client() as client:
             # 1. Fetch README
             readme_resp = await client.get(f"/repos/{owner}/{repo}/readme")
-            if readme_resp.status_code == 200:
+            if readme_resp.status_code == 200 and len(readme_resp.content) <= MAX_DOC_PAYLOAD_BYTES:
                 has_readme = True
                 content = readme_resp.json().get("content", "")
                 encoding = readme_resp.json().get("encoding", "")
@@ -349,7 +349,7 @@ class GitHubClient:
             # 2. Fetch CONTRIBUTING if available
             for candidate in ("CONTRIBUTING.md", ".github/CONTRIBUTING.md", "contributing.md"):
                 contrib_resp = await client.get(f"/repos/{owner}/{repo}/contents/{candidate}")
-                if contrib_resp.status_code == 200:
+                if contrib_resp.status_code == 200 and len(contrib_resp.content) <= MAX_DOC_PAYLOAD_BYTES:
                     has_contributing = True
                     content = contrib_resp.json().get("content", "")
                     encoding = contrib_resp.json().get("encoding", "")
@@ -407,6 +407,10 @@ class GitHubClient:
             if resp.status_code != 200:
                 # If recursive tree fails, return empty
                 return [], False, False
+
+            # Defense-in-depth: Reject upstream response if exceeds maximum payload safety limit
+            if len(resp.content) > MAX_TREE_PAYLOAD_BYTES:
+                return [], True, True
 
             data = resp.json()
             github_truncated = bool(data.get("truncated", False))

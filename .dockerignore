@@ -1,0 +1,40 @@
+# Version control and editor
+.git
+.github
+.gitignore
+.vscode
+.idea
+*.swp
+*.swo
+
+# Secrets and environment files (strictly exclude runtime secrets)
+.env
+.env.*
+!.env.example
+
+# Python caches and virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+env/
+ENV/
+
+# Node caches and builds
+node_modules/
+dist/
+build/
+.npm/
+
+# Scratch and non-essential documentation/artifacts
+scratch/
+docs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

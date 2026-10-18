@@ -7,6 +7,19 @@ from pydantic import BaseModel, Field
 PROMPT_VERSION = "1.0.0"
 
 
+def sanitize_untrusted_text(text: str) -> str:
+    """
+    Defensively neutralize structural delimiter breakout attacks in untrusted inputs.
+    Replaces attempts to close or open structural XML tags such as </untrusted_...>.
+    """
+    if not text or not isinstance(text, str):
+        return ""
+    # Defang structural delimiter tags
+    sanitized = text.replace("</untrusted_", "<\\/untrusted_")
+    sanitized = sanitized.replace("<untrusted_", "<\\_untrusted_")
+    return sanitized
+
+
 class IssueFitAssessment(BaseModel):
     """Gemma fit assessment for a single candidate issue."""
 
@@ -70,7 +83,7 @@ def build_fit_prompt(
     if readme_excerpt.strip():
         lines.append("### Repository Context (Excerpt)")
         lines.append("<untrusted_repo_context>")
-        lines.append(readme_excerpt[:1500].strip())
+        lines.append(sanitize_untrusted_text(readme_excerpt[:1500].strip()))
         lines.append("</untrusted_repo_context>")
         lines.append("")
 
@@ -79,7 +92,7 @@ def build_fit_prompt(
     lines.append("### Candidate Repository File Tree")
     lines.append("<untrusted_file_tree>")
     for path in tree_slice:
-        lines.append(path)
+        lines.append(sanitize_untrusted_text(path))
     lines.append("</untrusted_file_tree>")
     lines.append("")
 
@@ -87,10 +100,10 @@ def build_fit_prompt(
     lines.append("### Candidate Issues to Evaluate")
     for issue in candidate_issues[:12]:
         num = issue.get("number")
-        title = issue.get("title", "")
-        body = (issue.get("body") or "")[:800].strip()
+        title = sanitize_untrusted_text(issue.get("title", ""))
+        body = sanitize_untrusted_text((issue.get("body") or "")[:800].strip())
         labels = [
-            (l.get("name") if isinstance(l, dict) else str(l))
+            sanitize_untrusted_text(l.get("name") if isinstance(l, dict) else str(l))
             for l in (issue.get("labels") or [])
         ]
         lines.append(f"<untrusted_issue_data number=\"{num}\">")
@@ -180,9 +193,9 @@ def build_plan_prompt(
         lines.append("### Repository Guidance (Excerpts)")
         lines.append("<untrusted_repo_context>")
         if readme_excerpt.strip():
-            lines.append(f"README:\n{readme_excerpt[:2000].strip()}\n")
+            lines.append(f"README:\n{sanitize_untrusted_text(readme_excerpt[:2000].strip())}\n")
         if contributing_excerpt.strip():
-            lines.append(f"CONTRIBUTING:\n{contributing_excerpt[:2000].strip()}\n")
+            lines.append(f"CONTRIBUTING:\n{sanitize_untrusted_text(contributing_excerpt[:2000].strip())}\n")
         lines.append("</untrusted_repo_context>")
         lines.append("")
 
@@ -190,22 +203,22 @@ def build_plan_prompt(
     lines.append("### Repository File Tree (Reference)")
     lines.append("<untrusted_file_tree>")
     for path in file_tree[:350]:
-        lines.append(path)
+        lines.append(sanitize_untrusted_text(path))
     lines.append("</untrusted_file_tree>")
     lines.append("")
 
     # Target Issue Context
     lines.append("### Target Issue to Plan")
     lines.append(f"<untrusted_issue_data number=\"{issue_data.get('number')}\">")
-    lines.append(f"Title: {issue_data.get('title', '')}")
-    body_text = (issue_data.get("body") or "")[:2500].strip()
+    lines.append(f"Title: {sanitize_untrusted_text(issue_data.get('title', ''))}")
+    body_text = sanitize_untrusted_text((issue_data.get("body") or "")[:2500].strip())
     lines.append(f"Description:\n{body_text}")
 
     if comments:
         lines.append("\nRecent Comments on this Issue:")
         for idx, c in enumerate(comments[:6]):
-            c_author = c.get("user", {}).get("login", "user")
-            c_body = (c.get("body") or "")[:500].strip()
+            c_author = sanitize_untrusted_text(c.get("user", {}).get("login", "user"))
+            c_body = sanitize_untrusted_text((c.get("body") or "")[:500].strip())
             lines.append(f"Comment {idx + 1} by @{c_author}:\n{c_body}\n")
     lines.append("</untrusted_issue_data>")
     lines.append("")

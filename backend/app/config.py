@@ -1,6 +1,6 @@
 from pathlib import Path
-from typing import Optional
-from pydantic import Field
+from typing import Any, Optional, Union
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -34,8 +34,16 @@ class Settings(BaseSettings):
     ANALYZE_RATE_LIMIT: str = Field(default="10/10minutes")
     PLAN_RATE_LIMIT: str = Field(default="10/10minutes")
     HEALTH_RATE_LIMIT: str = Field(default="60/minute")
-    TRUSTED_PROXIES: list[str] = Field(default_factory=list)
+    TRUSTED_PROXIES: Union[list[str], str] = Field(default_factory=list)
     ENABLE_RATE_LIMIT: bool = Field(default=True)
+
+    @field_validator("TRUSTED_PROXIES", mode="before")
+    @classmethod
+    def parse_trusted_proxies(cls, v: Any) -> list[str]:
+        """Support comma-separated strings for TRUSTED_PROXIES in environment files."""
+        if isinstance(v, str):
+            return [ip.strip() for ip in v.split(",") if ip.strip()]
+        return v or []
 
     @property
     def has_gemini_key(self) -> bool:

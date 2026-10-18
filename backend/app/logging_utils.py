@@ -51,9 +51,15 @@ class SecretRedactionFilter(logging.Filter):
             record.msg = redact_sensitive_string(record.msg)
         if record.args:
             if isinstance(record.args, dict):
-                record.args = {k: redact_sensitive_string(str(v)) for k, v in record.args.items()}
+                record.args = {
+                    k: redact_sensitive_string(v) if isinstance(v, str) else v
+                    for k, v in record.args.items()
+                }
             elif isinstance(record.args, tuple):
-                record.args = tuple(redact_sensitive_string(str(a)) for a in record.args)
+                record.args = tuple(
+                    redact_sensitive_string(a) if isinstance(a, str) else a
+                    for a in record.args
+                )
         return True
 
 

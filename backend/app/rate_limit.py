@@ -42,23 +42,43 @@ def parse_rate_limit(rule: str) -> tuple[int, int]:
     return count, max(1, window)
 
 
+def is_ip_trusted(immediate_ip: str, trusted_list: list[str]) -> bool:
+    """Check if immediate peer IP matches any trusted proxy IP or CIDR network."""
+    import ipaddress
+    for item in trusted_list:
+        if item == immediate_ip:
+            return True
+        if "/" in item:
+            try:
+                if ipaddress.ip_address(immediate_ip) in ipaddress.ip_network(item, strict=False):
+                    return True
+            except ValueError:
+                continue
+    return False
+
+
 def get_client_identifier(request: Request, trusted_proxies: Optional[list[str]] = None) -> str:
     """
     Safely determine client identity without trusting spoofed proxy headers.
     
     Security Policy:
-    - Never trust 'X-Forwarded-For' unless the immediate peer IP (request.client.host)
-      is explicitly listed in settings.TRUSTED_PROXIES.
-    - If running locally without trusted proxies configured, use request.client.host.
+    - Never trust forwarded headers ('X-Real-IP' or 'X-Forwarded-For') unless the
+      immediate peer IP (request.client.host) matches an IP or CIDR block explicitly
+      listed in settings.TRUSTED_PROXIES.
+    - If running without trusted proxies configured or if peer is untrusted, use request.client.host.
+    - When direct peer is a trusted proxy, prefer 'X-Real-IP' (sanitized edge IP)
+      or the canonical client IP from 'X-Forwarded-For'.
     """
     trusted = trusted_proxies if trusted_proxies is not None else settings.TRUSTED_PROXIES
     immediate_ip = request.client.host if request.client else "127.0.0.1"
 
-    # Only inspect X-Forwarded-For if immediate peer is in trusted proxies
-    if trusted and immediate_ip in trusted:
+    # Only inspect forwarded headers if immediate peer is in trusted proxies
+    if trusted and is_ip_trusted(immediate_ip, trusted):
+        real_ip = request.headers.get("x-real-ip")
+        if real_ip and real_ip.strip():
+            return real_ip.strip()
         forwarded = request.headers.get("x-forwarded-for")
         if forwarded:
-            # First IP in the comma-separated chain is the original client
             parts = [ip.strip() for ip in forwarded.split(",") if ip.strip()]
             if parts:
                 return parts[0]

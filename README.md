@@ -12,11 +12,28 @@ Built for **Hacktoberfest Hack Day (Theme 2: AI for Open Innovation)**.
 
 You can run PatchLoom completely locally in under 60 seconds. **No API keys or GitHub tokens are required** to run the app or verify the complete workflow via offline fixture mode.
 
-### 1. Prerequisites
+### Option A: Docker Compose (Fastest & Production-Grade)
+Requires Docker & Docker Compose:
+```bash
+# Clone and launch containers
+docker compose up -d
+```
+- Interactive Frontend: [http://localhost:3000](http://localhost:3000)
+- Backend Health Check (proxied): [http://localhost:3000/api/health](http://localhost:3000/api/health)
+*(Note: In Docker Compose, backend port 8000 is isolated from the host and reached exclusively through the Nginx gateway at port 3000.)*
+
+To stop containers:
+```bash
+docker compose down
+```
+
+### Option B: Local Python + Node Setup
+
+#### 1. Prerequisites
 - **Python 3.11+** (tested on Python 3.13)
 - **Node.js 18+** & **npm** (tested on Node v25 / npm 11)
 
-### 2. Backend Setup
+#### 2. Backend Setup
 From the repository root:
 ```bash
 # Create and activate virtual environment
@@ -36,7 +53,7 @@ uvicorn app.main:app --app-dir backend --port 8000
 Backend health check is available at: [http://localhost:8000/api/health](http://localhost:8000/api/health)  
 Interactive OpenAPI documentation is available at: [http://localhost:8000/docs](http://localhost:8000/docs)
 
-### 3. Frontend Setup
+#### 3. Frontend Setup
 In a second terminal:
 ```bash
 cd frontend
