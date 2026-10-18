@@ -1,0 +1,224 @@
+{
+  "source_url": "https://github.com/psf/requests",
+  "collected_at": "2026-10-18T10:00:00Z",
+  "description": "Scenario A: High-fit candidate issues with verified grounded files and setup/test documentation.",
+  "repo": {
+    "owner": "psf",
+    "name": "requests",
+    "description": "A simple, yet elegant, HTTP library.",
+    "default_branch": "main",
+    "languages": ["Python"],
+    "open_issues_count": 84,
+    "has_readme": true,
+    "has_contributing": true,
+    "has_ci": true,
+    "tree_truncated": false
+  },
+  "docs": {
+    "has_readme": true,
+    "has_contributing": true,
+    "has_setup_guide": true,
+    "has_test_guide": true,
+    "readme_excerpt": "Requests allows you to send HTTP/1.1 requests extremely easily.",
+    "contributing_excerpt": "Run pytest tests/ to execute the full test suite. Set up your virtualenv with pip install -e .[dev]."
+  },
+  "file_tree": [
+    "README.md",
+    "CONTRIBUTING.md",
+    "setup.py",
+    "pyproject.toml",
+    "src/requests/__init__.py",
+    "src/requests/adapters.py",
+    "src/requests/api.py",
+    "src/requests/auth.py",
+    "src/requests/compat.py",
+    "src/requests/cookies.py",
+    "src/requests/exceptions.py",
+    "src/requests/help.py",
+    "src/requests/hooks.py",
+    "src/requests/models.py",
+    "src/requests/packages.py",
+    "src/requests/sessions.py",
+    "src/requests/status_codes.py",
+    "src/requests/structures.py",
+    "src/requests/utils.py",
+    "tests/__init__.py",
+    "tests/compat.py",
+    "tests/conftest.py",
+    "tests/test_lowlevel.py",
+    "tests/test_requests.py",
+    "tests/test_structures.py",
+    "tests/test_utils.py",
+    "docs/Makefile",
+    "docs/conf.py",
+    "docs/index.rst",
+    "docs/user/quickstart.rst",
+    "docs/user/advanced.rst",
+    "docs/user/install.rst",
+    "docs/dev/contributing.rst"
+  ],
+  "issues": [
+    {
+      "number": 6542,
+      "title": "Improve timeout documentation and example for streaming requests",
+      "url": "https://github.com/psf/requests/issues/6542",
+      "labels": ["documentation", "good-first-issue"],
+      "created_at": "2026-09-15T14:20:00Z",
+      "updated_at": "2026-10-12T11:00:00Z",
+      "comments_count": 4,
+      "body": "The streaming requests section in `docs/user/advanced.rst` mentions passing `stream=True`, but does not clearly illustrate how `timeout` applies to chunk iteration vs initial socket connection. Clarifying this with an example snippet would help new users avoid hanging indefinitely.",
+      "viability_score": 92,
+      "viability_band": "high",
+      "signals": {
+        "issue_age_and_inactivity": {
+          "status": "verified",
+          "source": "github_rest_issue_timestamps",
+          "observed_at": "2026-10-18T10:00:00Z",
+          "value": "Updated within last 30 days"
+        },
+        "assignment_status": {
+          "status": "verified",
+          "source": "github_rest_issue_assignees",
+          "observed_at": "2026-10-18T10:00:00Z",
+          "value": "Unassigned"
+        },
+        "linked_pr_status": {
+          "status": "verified",
+          "source": "github_rest_issue_timeline_heuristic",
+          "observed_at": "2026-10-18T10:00:00Z",
+          "value": "none_detected"
+        },
+        "description_quality": {
+          "status": "verified",
+          "source": "issue_body_character_count",
+          "observed_at": "2026-10-18T10:00:00Z",
+          "value": "Detailed body (>200 chars)"
+        },
+        "repo_guidance": {
+          "status": "verified",
+          "source": "repo_documentation_extraction",
+          "observed_at": "2026-10-18T10:00:00Z",
+          "value": "Both setup and testing guides available"
+        }
+      },
+      "negative_factors": [],
+      "unknown_factors": [],
+      "fit_score": 95,
+      "final_score": 93.8,
+      "matching_skills": ["python", "documentation"],
+      "skill_gaps": [],
+      "estimated_hours": 2.0,
+      "likely_files": ["docs/user/advanced.rst", "docs/user/quickstart.rst"],
+      "reason": "Clear documentation improvement with specific doc files identified. Matches Python experience and easily completed within a 3-hour budget.",
+      "risks": ["Ensure Sphinx docs build cleanly locally without warning regressions."],
+      "inferences": ["Estimated effort 2 hours based on doc edits and local Sphinx verification."]
+    },
+    {
+      "number": 6480,
+      "title": "Add type annotations to urllib3 pool manager adapter helper",
+      "url": "https://github.com/psf/requests/issues/6480",
+      "labels": ["typing", "help-wanted"],
+      "created_at": "2026-08-10T09:15:00Z",
+      "updated_at": "2026-10-05T16:30:00Z",
+      "comments_count": 6,
+      "body": "In `src/requests/adapters.py`, the `init_poolmanager` method lacks PEP 484 type annotations for pool connection parameters. We should add type hints and verify with mypy.",
+      "viability_score": 85,
+      "viability_band": "high",
+      "signals": {
+        "issue_age_and_inactivity": {
+          "status": "verified",
+          "source": "github_rest_issue_timestamps",
+          "observed_at": "2026-10-18T10:00:00Z",
+          "value": "Updated within last 30 days"
+        },
+        "assignment_status": {
+          "status": "verified",
+          "source": "github_rest_issue_assignees",
+          "observed_at": "2026-10-18T10:00:00Z",
+          "value": "Unassigned"
+        },
+        "linked_pr_status": {
+          "status": "verified",
+          "source": "github_rest_issue_timeline_heuristic",
+          "observed_at": "2026-10-18T10:00:00Z",
+          "value": "none_detected"
+        },
+        "description_quality": {
+          "status": "verified",
+          "source": "issue_body_character_count",
+          "observed_at": "2026-10-18T10:00:00Z",
+          "value": "Detailed body (>200 chars)"
+        },
+        "repo_guidance": {
+          "status": "verified",
+          "source": "repo_documentation_extraction",
+          "observed_at": "2026-10-18T10:00:00Z",
+          "value": "Both setup and testing guides available"
+        }
+      },
+      "negative_factors": [],
+      "unknown_factors": [],
+      "fit_score": 80,
+      "final_score": 82.0,
+      "matching_skills": ["python"],
+      "skill_gaps": ["mypy"],
+      "estimated_hours": 3.0,
+      "likely_files": ["src/requests/adapters.py", "tests/test_requests.py"],
+      "reason": "Focused type hinting task directly touching `adapters.py`. Good fit for an intermediate Python contributor.",
+      "risks": ["Urllib3 version compatibility across different Python versions."],
+      "inferences": ["Requires running mypy type check suite."]
+    }
+  ],
+  "plans": {
+    "6542": {
+      "issue_number": 6542,
+      "issue_title": "Improve timeout documentation and example for streaming requests",
+      "issue_url": "https://github.com/psf/requests/issues/6542",
+      "summary": "Step-by-step documentation PR to clarify how timeout values apply to streaming responses with reproducible examples.",
+      "steps": [
+        {
+          "title": "Review streaming documentation section",
+          "detail": "Inspect `docs/user/advanced.rst` around the 'Streaming Requests' subsection to understand the current prose.",
+          "kind": "verified",
+          "files": ["docs/user/advanced.rst"]
+        },
+        {
+          "title": "Draft timeout clarification with code example",
+          "detail": "Add a clear paragraph explaining that connect timeout applies to initial connection while read timeout applies to each socket chunk read during `iter_content()`. Include a 5-line code snippet showing `requests.get(..., stream=True, timeout=(3.05, 27))`.",
+          "kind": "inference",
+          "files": ["docs/user/advanced.rst"]
+        },
+        {
+          "title": "Build and verify Sphinx documentation locally",
+          "detail": "Run `cd docs && make html` to ensure the RST compiles into HTML without warnings or broken cross-references.",
+          "kind": "inference",
+          "files": ["docs/Makefile", "docs/conf.py"]
+        }
+      ],
+      "setup_guidance": {
+        "status": "verified",
+        "notes": "Sphinx docs dependencies listed in `docs/` requirements. Virtualenv setup documented in `CONTRIBUTING.md`."
+      },
+      "test_guidance": {
+        "status": "verified",
+        "notes": "Run `make html` in `docs/` directory to verify documentation build."
+      },
+      "checklist": [
+        "Read docs/user/advanced.rst streaming section",
+        "Add timeout explanation for socket connect vs read timeouts",
+        "Add practical code example demonstrating stream=True with tuple timeout",
+        "Run `make html` in docs/ to confirm clean build without Sphinx warnings",
+        "Review git diff for formatting cleanliness"
+      ],
+      "pr_title": "docs: clarify connection vs read timeout behavior for streaming requests (#6542)",
+      "pr_description_draft": "## Summary of Changes\nClarifies the documentation in `docs/user/advanced.rst` regarding how `timeout` applies when `stream=True` is enabled. Specifically explains that connect timeout governs the initial socket connection while read timeout governs each chunk received.\n\n## Testing Done\n- Built docs locally using `make html` in `docs/`.\n- Verified rendered HTML in browser with zero Sphinx warnings.\n\nFixes #6542",
+      "open_questions_for_maintainer": [
+        "Should we also cross-reference this in docs/user/quickstart.rst under the basic Timeouts section?"
+      ],
+      "ai_status": "complete",
+      "warnings": [
+        "Demo/Fixture mode active. Showing validated offline snapshot data."
+      ]
+    }
+  }
+}

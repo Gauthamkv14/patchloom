@@ -1,0 +1,158 @@
+{
+  "source_url": "https://github.com/encode/uvicorn",
+  "collected_at": "2026-10-18T10:00:00Z",
+  "description": "Scenario C: AI unavailable, quota exhausted, or invalid model output; demonstrating deterministic fallback ranking and heuristic plan without faking AI scores.",
+  "repo": {
+    "owner": "encode",
+    "name": "uvicorn",
+    "description": "An ASGI web server, for Python.",
+    "default_branch": "master",
+    "languages": ["Python"],
+    "open_issues_count": 68,
+    "has_readme": true,
+    "has_contributing": true,
+    "has_ci": true,
+    "tree_truncated": false
+  },
+  "docs": {
+    "has_readme": true,
+    "has_contributing": true,
+    "has_setup_guide": true,
+    "has_test_guide": true,
+    "readme_excerpt": "Uvicorn is an ASGI web server implementation for Python.",
+    "contributing_excerpt": "Run scripts/test to execute pytest across environments."
+  },
+  "file_tree": [
+    "README.md",
+    "pyproject.toml",
+    "uvicorn/__init__.py",
+    "uvicorn/main.py",
+    "uvicorn/config.py",
+    "uvicorn/server.py",
+    "uvicorn/protocols/http/auto.py",
+    "uvicorn/protocols/http/h11_impl.py",
+    "uvicorn/protocols/http/httptools_impl.py",
+    "uvicorn/protocols/websockets/auto.py",
+    "uvicorn/protocols/websockets/websockets_impl.py",
+    "uvicorn/protocols/websockets/wsproto_impl.py",
+    "uvicorn/loops/auto.py",
+    "uvicorn/loops/asyncio.py",
+    "uvicorn/loops/uvloop.py",
+    "tests/__init__.py",
+    "tests/conftest.py",
+    "tests/test_main.py",
+    "tests/test_config.py",
+    "tests/test_server.py",
+    "docs/index.md",
+    "docs/deployment.md",
+    "docs/settings.md"
+  ],
+  "issues": [
+    {
+      "number": 2185,
+      "title": "Add documentation for ssl_handshake_timeout configuration parameter",
+      "url": "https://github.com/encode/uvicorn/issues/2185",
+      "labels": ["documentation"],
+      "created_at": "2026-09-20T10:00:00Z",
+      "updated_at": "2026-10-10T14:00:00Z",
+      "comments_count": 3,
+      "body": "The `ssl_handshake_timeout` option was added in a recent release but does not appear in `docs/settings.md`. We should add an entry describing its default value and behavior.",
+      "viability_score": 90,
+      "viability_band": "high",
+      "signals": {
+        "issue_age_and_inactivity": {
+          "status": "verified",
+          "source": "github_rest_issue_timestamps",
+          "observed_at": "2026-10-18T10:00:00Z",
+          "value": "Updated within last 30 days"
+        },
+        "assignment_status": {
+          "status": "verified",
+          "source": "github_rest_issue_assignees",
+          "observed_at": "2026-10-18T10:00:00Z",
+          "value": "Unassigned"
+        },
+        "linked_pr_status": {
+          "status": "verified",
+          "source": "github_rest_issue_timeline_heuristic",
+          "observed_at": "2026-10-18T10:00:00Z",
+          "value": "none_detected"
+        },
+        "description_quality": {
+          "status": "verified",
+          "source": "issue_body_character_count",
+          "observed_at": "2026-10-18T10:00:00Z",
+          "value": "Detailed body (>200 chars)"
+        },
+        "repo_guidance": {
+          "status": "verified",
+          "source": "repo_documentation_extraction",
+          "observed_at": "2026-10-18T10:00:00Z",
+          "value": "Both setup and testing guides available"
+        }
+      },
+      "negative_factors": [],
+      "unknown_factors": [],
+      "fit_score": null,
+      "final_score": 90.0,
+      "matching_skills": [],
+      "skill_gaps": [],
+      "estimated_hours": null,
+      "likely_files": [],
+      "reason": null,
+      "risks": [],
+      "inferences": []
+    }
+  ],
+  "plans": {
+    "2185": {
+      "issue_number": 2185,
+      "issue_title": "Add documentation for ssl_handshake_timeout configuration parameter",
+      "issue_url": "https://github.com/encode/uvicorn/issues/2185",
+      "summary": "Implementation plan for #2185 ('Add documentation for ssl_handshake_timeout configuration parameter').",
+      "steps": [
+        {
+          "title": "Review relevant documentation and tests",
+          "detail": "Inspect docs/settings.md and related files for context on #2185.",
+          "kind": "verified",
+          "files": ["docs/settings.md"]
+        },
+        {
+          "title": "Implement targeted changes",
+          "detail": "Make minimal edits to address #2185 ('Add documentation for ssl_handshake_timeout configuration parameter').",
+          "kind": "inference",
+          "files": ["docs/settings.md", "uvicorn/config.py"]
+        },
+        {
+          "title": "Run tests and verify formatting",
+          "detail": "Execute repository test suite and verify changes pass all checks.",
+          "kind": "inference",
+          "files": ["tests/test_config.py"]
+        }
+      ],
+      "setup_guidance": {
+        "status": "verified",
+        "notes": "Installation and setup guidance located in repository documentation."
+      },
+      "test_guidance": {
+        "status": "verified",
+        "notes": "Test suite runner and commands documented in repository README/CONTRIBUTING."
+      },
+      "checklist": [
+        "Inspect existing code and related tests",
+        "Make minimal changes to address #2185",
+        "Run test suite locally to verify no regressions",
+        "Draft pull request referencing #2185"
+      ],
+      "pr_title": "fix: resolve #2185 - Add documentation for ssl_handshake_timeout configuration parameter",
+      "pr_description_draft": "## Summary of Changes\nAddresses #2185 ('Add documentation for ssl_handshake_timeout configuration parameter').\n\n## Testing Done\n- Verified changes locally.\n\nFixes #2185",
+      "open_questions_for_maintainer": [
+        "Are there existing reproduction tests or specific style conventions for #2185?"
+      ],
+      "ai_status": "unavailable_or_invalid",
+      "warnings": [
+        "Demo/Fixture mode active: AI model is offline or unconfigured. Displaying deterministic heuristic plan."
+      ]
+    }
+  }
+}

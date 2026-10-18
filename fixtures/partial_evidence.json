@@ -1,0 +1,166 @@
+{
+  "source_url": "https://github.com/expressjs/express",
+  "collected_at": "2026-10-18T10:00:00Z",
+  "description": "Scenario B: Partial and unknown evidence with stale issues, unknown linked PR checks, and missing setup instructions.",
+  "repo": {
+    "owner": "expressjs",
+    "name": "express",
+    "description": "Fast, unopinionated, minimalist web framework for node.",
+    "default_branch": "master",
+    "languages": ["JavaScript"],
+    "open_issues_count": 142,
+    "has_readme": true,
+    "has_contributing": false,
+    "has_ci": true,
+    "tree_truncated": false
+  },
+  "docs": {
+    "has_readme": true,
+    "has_contributing": false,
+    "has_setup_guide": false,
+    "has_test_guide": true,
+    "readme_excerpt": "Express is a minimal and flexible Node.js web application framework.",
+    "contributing_excerpt": ""
+  },
+  "file_tree": [
+    "Readme.md",
+    "package.json",
+    "index.js",
+    "lib/express.js",
+    "lib/application.js",
+    "lib/request.js",
+    "lib/response.js",
+    "lib/router/index.js",
+    "lib/router/route.js",
+    "lib/router/layer.js",
+    "lib/middleware/init.js",
+    "lib/middleware/query.js",
+    "lib/view.js",
+    "test/app.listen.js",
+    "test/app.param.js",
+    "test/app.router.js",
+    "test/req.param.js",
+    "test/res.send.js"
+  ],
+  "issues": [
+    {
+      "number": 5102,
+      "title": "Refactor route parameter matching regex for unicode identifiers",
+      "url": "https://github.com/expressjs/express/issues/5102",
+      "labels": ["routing"],
+      "created_at": "2026-03-10T12:00:00Z",
+      "updated_at": "2026-06-01T15:00:00Z",
+      "comments_count": 2,
+      "body": "Route parameters with unicode characters sometimes fail to match as expected in `lib/router/layer.js`. We should investigate whether the path regex compiler supports unicode flags properly.",
+      "viability_score": 55,
+      "viability_band": "medium",
+      "signals": {
+        "issue_age_and_inactivity": {
+          "status": "verified",
+          "source": "github_rest_issue_timestamps",
+          "observed_at": "2026-10-18T10:00:00Z",
+          "value": "No activity in over 90 days (-15 penalty applied)"
+        },
+        "assignment_status": {
+          "status": "verified",
+          "source": "github_rest_issue_assignees",
+          "observed_at": "2026-10-18T10:00:00Z",
+          "value": "Unassigned"
+        },
+        "linked_pr_status": {
+          "status": "unknown",
+          "source": "github_rest_issue_timeline_heuristic",
+          "observed_at": "2026-10-18T10:00:00Z",
+          "value": "Timeline rate limit reached; linked PR check incomplete"
+        },
+        "description_quality": {
+          "status": "verified",
+          "source": "issue_body_character_count",
+          "observed_at": "2026-10-18T10:00:00Z",
+          "value": "Brief description (<200 chars, -5 penalty applied)"
+        },
+        "repo_guidance": {
+          "status": "verified",
+          "source": "repo_documentation_extraction",
+          "observed_at": "2026-10-18T10:00:00Z",
+          "value": "Missing CONTRIBUTING and setup guide (-10 penalty applied)"
+        }
+      },
+      "negative_factors": [
+        "Issue has been inactive for >90 days",
+        "Brief issue description provides limited context",
+        "No dedicated setup or contribution guide found in repository"
+      ],
+      "unknown_factors": [
+        "Linked PR evidence lookup could not be verified"
+      ],
+      "fit_score": 50,
+      "final_score": 53.0,
+      "matching_skills": ["javascript"],
+      "skill_gaps": ["regex internals"],
+      "estimated_hours": 6.0,
+      "likely_files": ["lib/router/layer.js", "test/app.router.js"],
+      "reason": "Touches core routing regex. While matching JavaScript skills, the lack of setup documentation and stale issue status pose significant onboarding risk.",
+      "risks": [
+        "Unverified linked PR status: another contributor might have already submitted a fix.",
+        "Breaking change risk with regex route matching across Express ecosystem."
+      ],
+      "inferences": [
+        "Estimated effort 6 hours due to deep regex debugging and testing."
+      ]
+    }
+  ],
+  "plans": {
+    "5102": {
+      "issue_number": 5102,
+      "issue_title": "Refactor route parameter matching regex for unicode identifiers",
+      "issue_url": "https://github.com/expressjs/express/issues/5102",
+      "summary": "Exploratory bugfix to reproduce and address unicode route parameter matching in `lib/router/layer.js`.",
+      "steps": [
+        {
+          "title": "Inspect route layer parameter matching",
+          "detail": "Examine `lib/router/layer.js` where `path-to-regexp` or custom RegExp matching is initialized.",
+          "kind": "verified",
+          "files": ["lib/router/layer.js"]
+        },
+        {
+          "title": "Write reproduction test case",
+          "detail": "Add a test in `test/app.router.js` with unicode route parameters (e.g. `/users/:nomée`) to reproduce the failure.",
+          "kind": "inference",
+          "files": ["test/app.router.js"]
+        },
+        {
+          "title": "Check maintainer consensus before submitting code",
+          "detail": "Because this issue has been dormant for >90 days, comment on the issue with the reproduction test results before opening a pull request.",
+          "kind": "inference",
+          "files": []
+        }
+      ],
+      "setup_guidance": {
+        "status": "unknown",
+        "notes": "No CONTRIBUTING.md or setup documentation found in repository. Consult standard `npm install`."
+      },
+      "test_guidance": {
+        "status": "verified",
+        "notes": "Run `npm test` to execute Mocha test suite."
+      },
+      "checklist": [
+        "Create reproduction unit test in test/app.router.js",
+        "Inspect RegExp compilation in lib/router/layer.js",
+        "Run `npm test` locally to ensure no regressions",
+        "Inquire with maintainers regarding unicode identifier policy"
+      ],
+      "pr_title": "fix(router): support unicode characters in route parameters (#5102)",
+      "pr_description_draft": "## Summary of Changes\nAddresses #5102 by adding unicode support to route parameter regex compilation in `lib/router/layer.js`.\n\n## Testing Done\n- Added reproduction unit test in `test/app.router.js`.\n- Verified full test suite passes with `npm test`.\n\nFixes #5102",
+      "open_questions_for_maintainer": [
+        "Does the project maintain a specific policy on unicode regex flag performance?",
+        "Are there known downstream middlewares affected by unicode parameter decoding?"
+      ],
+      "ai_status": "complete",
+      "warnings": [
+        "Demo/Fixture mode active. Showing validated offline snapshot data.",
+        "Issue has partial evidence: linked PR check is unknown, setup guidance is unverified."
+      ]
+    }
+  }
+}
