@@ -1,7 +1,7 @@
 """API route handlers for PatchLoom."""
 
 import uuid
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from app.analysis import analyze_repository
 from app.config import settings
 from app.github_client import (
@@ -14,6 +14,7 @@ from app.github_client import (
     RepoNotFoundError,
 )
 from app.planner import generate_first_pr_plan
+from app.rate_limit import rate_limit
 from app.schemas import (
     AnalyzeRequest,
     AnalyzeResponse,
@@ -25,7 +26,11 @@ from app.schemas import (
 router = APIRouter(prefix="/api")
 
 
-@router.get("/health", response_model=HealthResponse)
+@router.get(
+    "/health",
+    response_model=HealthResponse,
+    dependencies=[Depends(rate_limit("health", lambda: settings.HEALTH_RATE_LIMIT))],
+)
 async def health_check() -> HealthResponse:
     """Safe health check endpoint reporting service readiness without secrets."""
     return HealthResponse(
@@ -37,7 +42,11 @@ async def health_check() -> HealthResponse:
     )
 
 
-@router.post("/analyze", response_model=AnalyzeResponse)
+@router.post(
+    "/analyze",
+    response_model=AnalyzeResponse,
+    dependencies=[Depends(rate_limit("analyze", lambda: settings.ANALYZE_RATE_LIMIT))],
+)
 async def analyze_repo_endpoint(request: AnalyzeRequest) -> AnalyzeResponse:
     """Analyze a public GitHub repository and produce ranked candidate issues."""
     try:
@@ -80,7 +89,11 @@ async def analyze_repo_endpoint(request: AnalyzeRequest) -> AnalyzeResponse:
         ) from exc
 
 
-@router.post("/plan", response_model=PlanResponse)
+@router.post(
+    "/plan",
+    response_model=PlanResponse,
+    dependencies=[Depends(rate_limit("plan", lambda: settings.PLAN_RATE_LIMIT))],
+)
 async def generate_plan_endpoint(request: PlanRequest) -> PlanResponse:
     """Generate a bounded first-PR plan for a selected open GitHub issue."""
     try:

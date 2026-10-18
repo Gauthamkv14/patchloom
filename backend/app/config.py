@@ -34,6 +34,8 @@ class Settings(BaseSettings):
     ANALYZE_RATE_LIMIT: str = Field(default="10/10minutes")
     PLAN_RATE_LIMIT: str = Field(default="10/10minutes")
     HEALTH_RATE_LIMIT: str = Field(default="60/minute")
+    TRUSTED_PROXIES: list[str] = Field(default_factory=list)
+    ENABLE_RATE_LIMIT: bool = Field(default=True)
 
     @property
     def has_gemini_key(self) -> bool:

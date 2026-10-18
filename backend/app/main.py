@@ -9,6 +9,10 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api import router as api_router
 from app.config import settings
+from app.logging_utils import redact_sensitive_string, setup_secure_logging
+
+# Configure secure log redaction on startup
+setup_secure_logging()
 
 app = FastAPI(
     title="PatchLoom API",
@@ -30,6 +34,37 @@ app.add_middleware(
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type", "Accept"],
 )
+
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    """Add defensive HTTP security headers to all responses."""
+    response = await call_next(request)
+
+    # Standard security headers
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = (
+        "accelerometer=(), camera=(), geolocation=(), gyroscope=(), microphone=(), payment=()"
+    )
+
+    # Content-Security-Policy (CSP)
+    path = request.url.path
+    if path.startswith("/api/"):
+        response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none';"
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    elif path in ("/docs", "/redoc", "/openapi.json"):
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+            "img-src 'self' data: https://fastapi.tiangolo.com; "
+            "frame-ancestors 'none';"
+        )
+
+    return response
 
 
 @app.middleware("http")
@@ -66,6 +101,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     """Safe HTTP exception handler returning structured error JSON."""
     request_id = str(uuid.uuid4())
+    headers = getattr(exc, "headers", None) or {}
     return JSONResponse(
         status_code=exc.status_code,
         content={
@@ -73,6 +109,7 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
             "detail": exc.detail if isinstance(exc.detail, str) else str(exc.detail),
             "request_id": request_id,
         },
+        headers=headers,
     )
 
 
