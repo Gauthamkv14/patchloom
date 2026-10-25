@@ -151,7 +151,7 @@ async def test_gemini_persistent_500_raises_provider_error():
                 output_schema=DummyResponseSchema,
             )
     assert "Gemini API error (500)" in str(exc_info.value)
-    assert mock_client.aio.models.generate_content.call_count == 3
+    assert mock_client.aio.models.generate_content.call_count == 4
 
 
 def test_plan_model_output_schema_has_no_additional_properties():

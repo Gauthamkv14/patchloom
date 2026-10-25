@@ -102,7 +102,7 @@ flowchart TD
         GEMINI["Google Gemini API<br/>(models/gemma-4-31b-it)"]
     end
 
-    FASTAPI -->|Outbound REST (SSRF Protected)| GH
+    FASTAPI -->|"Outbound REST (SSRF Protected)"| GH
     FASTAPI -->|Structured JSON Reasoning| GEMINI
 ```
 

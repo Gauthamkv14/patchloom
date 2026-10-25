@@ -112,6 +112,11 @@
   - Scanned full Git history across all commits: confirmed `.env` was never committed and no real secrets exist in historical revisions.
   - Replaced high-entropy synthetic test fixtures in `backend/tests/test_hardening.py` with zero-entropy concatenated strings (`"AIzaSy" + "0" * 33`, `"ghp_" + "0" * 36`, etc.) to prevent false-positive alarms on external scanners while fully preserving regex redaction regression tests.
   - Confirmed `.env` is safely ignored by `.gitignore` (`.gitignore:2:.env`) and excluded by `.dockerignore` (`.dockerignore:11:.env`). `.env.example` contains only non-secret placeholders.
+- **Provider Resilience Hardening (Prompt Mode Fallback):**
+  - Added automatic prompt-mode fallback to `GeminiProvider._call_model` on schema errors (`ValueError: additionalProperties`) and server-side 500 crashes.
+  - Ensured `_fallback_prompt_mode` omits `response_mime_type="application/json"` to bypass the unstable Gemini API Gemma proxy.
+  - Enhanced `_parse_and_validate` with regex block extraction to reliably extract JSON from markdown fences or surrounding model commentary.
+
 
 
 

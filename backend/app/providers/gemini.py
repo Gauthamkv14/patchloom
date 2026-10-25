@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import re
 from typing import Any, Optional, Type
 from pydantic import BaseModel, ValidationError
 from google import genai
@@ -133,6 +134,19 @@ class GeminiProvider(ModelProvider):
                         config=config,
                     )
                 break
+            except ValueError as ve:
+                msg = str(ve)
+                if "additionalProperties" in msg or "schema" in msg.lower():
+                    logger.warning("SDK rejected schema (%s), falling back to prompt mode", ve)
+                    return await self._fallback_prompt_mode(
+                        client=client,
+                        model_id=model_id,
+                        system_instruction=system_instruction,
+                        user_prompt=user_prompt,
+                        output_schema=output_schema,
+                        timeout_seconds=timeout_seconds,
+                    )
+                raise ve
             except TimeoutError:
                 raise ModelTimeoutError(f"Model generation timed out after {timeout_seconds} seconds")
             except genai_errors.ClientError as exc:
@@ -170,6 +184,20 @@ class GeminiProvider(ModelProvider):
                     )
                     await asyncio.sleep(delay)
                     continue
+                # If server returns 500 on response_schema, attempt prompt-based mode as last recovery
+                if status_code == 500:
+                    logger.warning("Gemini API returned 500 on response_schema for '%s'. Attempting prompt mode fallback...", model_id)
+                    try:
+                        return await self._fallback_prompt_mode(
+                            client=client,
+                            model_id=model_id,
+                            system_instruction=system_instruction,
+                            user_prompt=user_prompt,
+                            output_schema=output_schema,
+                            timeout_seconds=timeout_seconds,
+                        )
+                    except Exception as fallback_exc:
+                        logger.warning("Prompt mode fallback also failed: %s", fallback_exc)
                 raise ModelProviderError(f"Gemini API error ({status_code or '5xx'}): {msg}") from exc
             except Exception as exc:
                 raise ModelProviderError(f"Unexpected provider error: {exc}") from exc
@@ -198,19 +226,14 @@ class GeminiProvider(ModelProvider):
             f"{user_prompt}\n\n"
             f"You MUST respond ONLY with valid JSON strictly conforming to this JSON schema:\n"
             f"```json\n{schema_json}\n```\n"
+            f"Output strictly the raw JSON object, with no markdown fences, no preamble, and no explanation."
         )
-
-        config = {
-            "response_mime_type": "application/json",
-            "temperature": 0.1,
-        }
 
         try:
             async with asyncio.timeout(timeout_seconds):
                 response = await client.aio.models.generate_content(
                     model=model_id,
                     contents=combined_prompt,
-                    config=config,
                 )
         except TimeoutError:
             raise ModelTimeoutError(f"Model generation timed out after {timeout_seconds} seconds")
@@ -243,14 +266,14 @@ class GeminiProvider(ModelProvider):
             raise InvalidModelOutputError("Model returned an empty response")
 
         clean_text = raw_text.strip()
-        # Strip markdown fence if present
-        if clean_text.startswith("```json"):
-            clean_text = clean_text[7:]
-        if clean_text.startswith("```"):
-            clean_text = clean_text[3:]
-        if clean_text.endswith("```"):
-            clean_text = clean_text[:-3]
-        clean_text = clean_text.strip()
+        # Robustly extract JSON block if wrapped in markdown fences or surrounding commentary
+        fence_match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", clean_text)
+        if fence_match:
+            clean_text = fence_match.group(1).strip()
+        else:
+            json_match = re.search(r"(\{[\s\S]*\}|\[[\s\S]*\])", clean_text)
+            if json_match:
+                clean_text = json_match.group(1).strip()
 
         try:
             parsed_data = json.loads(clean_text)
