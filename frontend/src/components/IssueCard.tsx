@@ -185,6 +185,45 @@ export const IssueCard: React.FC<IssueCardProps> = ({
             </div>
           )}
 
+          {issue.module_mapping && (
+            <div className="details-section">
+              <h4>Candidate Modules &amp; Investigation Targets</h4>
+              <div style={{ marginBottom: '0.5rem' }}>
+                <span className="badge badge-inference">Inferred Modules</span>
+                <strong style={{ marginLeft: '0.5rem' }}>
+                  {issue.module_mapping.candidate_modules.join(', ')}
+                </strong>
+                <p style={{ marginTop: '0.25rem', fontSize: '0.85rem', color: '#4b5563' }}>
+                  {issue.module_mapping.rationale}
+                </p>
+              </div>
+
+              {issue.module_mapping.candidate_files.length > 0 && (
+                <div>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#374151' }}>
+                    Candidate Files (Investigation Targets — not confirmed bug locations):
+                  </span>
+                  <ul className="file-targets-list" style={{ marginTop: '0.25rem' }}>
+                    {issue.module_mapping.candidate_files.map((cf, i) => (
+                      <li key={i} style={{ marginBottom: '0.35rem' }}>
+                        <code>{cf.path}</code>
+                        <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', color: '#6b7280' }}>
+                          (Relevance: {Math.round(cf.relevance_score * 100)}% match) — {cf.reasons.join(', ')}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {issue.module_mapping.unknowns_and_limitations.length > 0 && (
+                <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: '#6b7280' }}>
+                  <em>Limitations: {issue.module_mapping.unknowns_and_limitations.join(' ')}</em>
+                </div>
+              )}
+            </div>
+          )}
+
           {issue.likely_files && issue.likely_files.length > 0 && (
             <div className="details-section">
               <h4>Grounded File Targets (from Repository Tree)</h4>

@@ -17,11 +17,12 @@ New open-source contributors face an overwhelming discovery barrier. Repositorie
 - Contributors cannot gauge whether an issue matches their current skillset or available time.
 - Even when an issue is selected, contributors struggle to know which files to touch, what tests to run, or how to draft a maintainer-ready pull request.
 
-### The PatchLoom Solution
-PatchLoom bridges the gap between wanting to contribute and opening your first PR through a transparent, 3-stage pipeline:
-1. **Deterministic Repository Viability Signals:** Ingests live repository metadata, documentation (`README.md`, `CONTRIBUTING.md`), recent issue activity, and the repository file tree. Calculates an objective viability score (0-100) assessing issue staleness, assignment status, linked PR evidence, and reproduction quality.
-2. **Gemma 4 Contributor Fit Assessment:** Evaluates pre-filtered candidate issues against the contributor's skills, experience level, and available hours using `models/gemma-4-31b-it`. Identifies matching skills, skill gaps, estimated effort, and candidate files strictly grounded in the ingested file tree.
-3. **Grounded First-PR Planner:** Generates an actionable, step-by-step contribution plan (3-7 steps) for a chosen issue, complete with setup verification, test guidance, a draft PR title, and an unopinionated PR description draft.
+### The PatchLoom Solution (PatchLoom 2.0 Pillars)
+PatchLoom bridges the gap between wanting to contribute and opening your first PR through an evidence-grounded companion organized around four pillars:
+1. **DISCOVER — Viability Signals & Contributor Fit:** Ingests live repository metadata and computes an objective viability score (0–100) assessing issue staleness, assignment status, linked PR evidence, and reproduction quality. Evaluates pre-filtered candidate issues against the contributor's skills, experience level, and available hours using `models/gemma-4-31b-it`.
+2. **UNDERSTAND — Deterministic Repository Intelligence:** Analyzes repository architecture, programming languages, technologies, package manifests, key application entry points, test profiles, documentation, and logical modules without requiring AI model calls. Deterministically maps issues to components and grounded file targets.
+3. **LEARN & BUILD — Progressive Implementation Guidance:** Guides contributors with grounded candidate files and contextual explanations grounded strictly in existing code paths.
+4. **VERIFY & CONTRIBUTE — Grounded First-PR Planner:** Generates an actionable, step-by-step contribution plan (3–7 steps) for a chosen issue, complete with setup verification, test commands, a draft PR title, and a maintainer-ready PR description draft.
 
 ### What PatchLoom Does and Does Not Do
 - **What it does:** Recommends a ranked shortlist of plausible issues (up to 12), explains why each matches your skills and time budget, rigorously separates verified facts from AI inferences, and produces a grounded PR plan.

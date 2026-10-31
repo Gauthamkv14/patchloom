@@ -1,10 +1,10 @@
 # PROGRESS.md — PatchLoom Execution Log & Milestone Tracker
 
 ## Current Status
-- **Current Milestone:** M0.1 Architectural Cleanup — Complete & Verified
-- **Authorized Gate:** M0.1 Architectural Cleanup (Provider Routing, has_ci, Dependencies, Scratch Cleanup)
-- **Milestone Scope Complete:** P0 Core (M0–M7) + P1 Hardening (M8) + Deployment Readiness + M0 Audit + M0.1 Cleanup
-- **Blocked on:** M1 2.0 Gate Approval (Repository Intelligence layer)
+- **Current Milestone:** M1 2.0 Repository Intelligence Layer — Complete & Verified
+- **Authorized Gate:** M1 2.0 Repository Intelligence Layer (UNDERSTAND Pillar)
+- **Milestone Scope Complete:** P0 Core (M0–M7) + P1 Hardening (M8) + Deployment Readiness + M0 Audit + M0.1 Cleanup + M1 2.0 Intelligence Layer
+- **Blocked on:** M2 2.0 Gate Approval (Guided Issue Discovery / Concept Explanations)
 
 ---
 
@@ -25,7 +25,7 @@
 | **Deployment Readiness** | Security Audit & Dockerization | P1+ | Complete | Upstream caps, delimiter smuggling sanitizer, chunked encoding rejection, CIDR proxy trust, multi-stage unprivileged Docker containers, 79 tests passing |
 | **M0 2.0** | PatchLoom 2.0 Baseline Audit | 2.0 | Complete | 86 tests passing verified; full codebase audit; AGENTS.md updated; M1 design documented |
 | **M0.1** | Architectural Cleanup | 2.0 | Complete | Provider factory, has_ci bounded check & provenance, scratch cleanup, google-genai pinned, 95 tests passing |
-| **M1 2.0** | Repository Intelligence Layer | 2.0 | Not Started | Awaiting gate approval |
+| **M1 2.0** | Repository Intelligence Layer | 2.0 | Complete | Deterministic intelligence engine, overview, entrypoints, test & CI, docs, modules, issue-mapping, 110 tests passing |
 | **M9** | Ollama Provider & Evaluation | P2 | Not Started | Stretch (P2) |
 | **M10** | Render Deployment | P3 | Not Started | Contingent / Optional (P3) |
 
@@ -43,6 +43,7 @@
 8. **Dependencies and Reproducibility:** Select compatible dependency versions, pin them appropriately, and use lock files where supported by the chosen package managers. Avoid unnecessary dependencies and do not silently upgrade or introduce major tooling.
 9. **Container Security & Ephemeral Secrets:** Docker containers run exclusively as non-root users (`appuser` UID 10001, `nginx` UID 101). Secrets are strictly excluded from image layers via `.dockerignore` and passed only via runtime environment variables. The frontend Nginx container reverse-proxies `/api/` to `backend:8000` with strict Content Security Policy.
 10. **Network Ingress & Targeted Proxy Isolation:** The backend container's port 8000 is internal only (`expose: ["8000"]`) and never published to the host interfaces. The frontend container on port 3000 serves as the single public gateway. To prevent proxy spoofing, Nginx overwrites incoming forwarded headers with the TCP remote address (`$remote_addr`), and backend `TRUSTED_PROXIES` is strictly restricted to the static IP of the frontend proxy container (`172.28.0.10`) on dedicated subnet `172.28.0.0/24`. All base container images are pinned by deliberate versions and immutable multi-architecture manifest digests.
+11. **Deterministic Repository Intelligence Engine (Pillar 2 - UNDERSTAND):** The M1 engine is 100% deterministic, operating without requiring AI model inference, credentials, cloning, shell execution, or external network dependencies beyond standard public GitHub tree/metadata fetching. Testing infrastructure is strictly modeled as `detected`, `not_detected` (only when the tree is complete), or `unknown` (when truncated or incomplete). Every insight tracks evidence provenance (`status`, `source`, `observed_at`). Issue-to-module mapping strictly retains grounded files present in the ingested tree. Plain text rendering in React JSX with zero `dangerouslySetInnerHTML`.
 
 ---
 
@@ -71,13 +72,14 @@
 
 ## Recent Activity & Test Results
  
-- **Backend Pytest Suite:** 82 passed in 2.53s (`pytest backend/tests/ -v`).
+- **Backend Pytest Suite:** 110 passed in 6.47s (`pytest backend/tests/ -v`).
+  - `test_repo_intelligence.py`: 15 tests passed (deterministic overview, language distribution, technologies, entry points, test & CI intelligence, documentation extraction, module partitioning, issue-to-module mapping, demo mode, API endpoint).
   - `test_health.py`: 1 test passed (200 OK, no secrets).
   - `test_url_validation.py`: 26 tests passed (strict structural validation, rejected exploits, edge-cases).
-  - `test_github_client.py`: 7 tests passed (metadata, 404, 403 rate-limit with retry-after, PR exclusion, docs hints, tree bounding and truncation tracking, caching).
+  - `test_github_client.py`: 12 tests passed (metadata, 404, 403 rate-limit with retry-after, PR exclusion, docs hints, tree bounding and truncation tracking, caching, CI detection detected/not_detected/unknown).
   - `test_signals.py`: 8 tests passed (penalties, clamping to [0,100], bands, linked-PR heuristics, candidate pre-filtering).
-  - `test_provider.py`: 4 tests passed (missing key auth error, 429 quota error, 403 auth error, invalid JSON output mapping).
-  - `test_analysis.py`: 8 tests passed (grounding, fallback on provider error, demo mode skip, invalid URL 400 rejection, prompt injection safety, quota no-retry, invalid output 1-retry, prompt 60k hard cap).
+  - `test_provider.py`: 11 tests passed (missing key auth error, 429 quota error, 403 auth error, invalid JSON output mapping, transient 503 retry, persistent 500 error, provider routing, factory case-insensitivity, unsupported provider error).
+  - `test_analysis.py`: 9 tests passed (grounding, fallback on provider error, demo mode skip, invalid URL 400 rejection, prompt injection safety, quota no-retry, invalid output 1-retry, prompt 60k hard cap, unsupported provider rejection).
   - `test_planner.py`: 5 tests passed (grounding with hallucinated paths dropped, unverified setup/test labeled as unknown, fallback on quota error without retry, single retry on invalid output, 400 rejection on closed issue).
   - `test_fixtures.py`: 5 tests passed (Scenario A good-fit, Scenario B partial/unknown evidence, Scenario C deterministic fallback, fixture plan generation, zero external network/model calls).
   - `test_hardening.py`: 18 tests passed:

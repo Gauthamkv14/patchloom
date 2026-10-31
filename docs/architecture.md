@@ -133,7 +133,49 @@ Model providers implement the abstract interface in [`backend/app/providers/base
 
 ---
 
-## 5. Realistic 100× Scaling Discussion (Future Work)
+## 5. PatchLoom 2.0: UNDERSTAND Pillar — Repository Intelligence Engine
+
+PatchLoom 2.0 introduces the **Repository Intelligence Engine** ([`repo_intelligence.py`](file:///c:/Users/User/OneDrive/Desktop/Projects/PatchLoom/backend/app/repo_intelligence.py)), a 100% deterministic analysis subsystem powering the **UNDERSTAND** product pillar.
+
+### Subsystem Architecture
+
+The engine runs concurrently during repository analysis (`POST /api/analyze`) and is also exposed via standalone endpoint (`POST /api/intelligence`). It requires zero AI provider calls, zero API keys, and zero code execution:
+
+1. **Repository Overview & Technology Discovery:**
+   - Classifies primary and secondary programming languages by reconciling GitHub byte distributions with repository file extensions.
+   - Detects framework, runtime, database, linter, and container technologies by matching file trees against declarative technology signatures.
+   - Categorizes project type (`api_service`, `web_application`, `library_or_sdk`, `cli_tool`, `monorepo`, `documentation_or_static`, `other`) and structure type (`single_package`, `multi_module`, `monorepo`, `standard_flat`).
+   - Identifies package managers (`npm`, `pip`, `poetry`, `cargo`, `go`, etc.) and dependency manifests.
+
+2. **Entry Point Identification:**
+   - Scans tree for root and subpackage application roots (`main.py`, `app.py`, `server.ts`, `index.ts`), frontend clients (`src/main.tsx`, `src/App.tsx`), library interfaces (`__init__.py`, `lib.rs`), CLI dispatchers (`cli.py`), and manifests (`package.json`, `pyproject.toml`).
+   - Distinguishes verified `detected` entry points from heuristic `candidate` entry points.
+   - Explains the exact reason each entry point was identified.
+
+3. **Test Infrastructure & CI Intelligence:**
+   - Detects test directories (`tests/`, `__tests__/`, `spec/`), test files (`test_*.py`, `*.test.ts`, `*_test.go`), and testing frameworks (`pytest`, `Jest`, `Vitest`, `Mocha`, `cargo test`, `go test`).
+   - Reconciles CI workflow files (`.github/workflows/`) with provenance tracking.
+   - Strictly models three states: `detected` (proven), `not_detected` (complete tree inspected and none found), or `unknown` (tree truncated or inspection incomplete).
+   - Extracts likely test commands from docs and configurations, with explicit disclaimers: tests were never executed and no claims of passing tests are made.
+
+4. **Documentation Profile Extraction:**
+   - Bounded inspection of `README.md`, `CONTRIBUTING.md`, architecture guides, and setup documentation.
+   - Extracts project purpose, setup shell commands, and test guidelines using structural markdown header and fence parsing.
+   - Defensively defangs delimiter smuggling and untrusted markdown.
+
+5. **Logical Module Partitioning:**
+   - Partitions the repository tree into logical components based on top-level and subpackage boundaries.
+   - Assigns component types (`core_logic`, `api_routes`, `ui_components`, `tests`, `configuration`, `documentation`, `utility`, `cli`, `service`) and confidence levels (`high`, `medium`, `low`).
+   - Aggregates file counts and key entry files per module.
+
+6. **Deterministic Issue-to-Module Mapping:**
+   - Maps each candidate issue to repository components and file targets through lexical token overlap and path heuristics.
+   - Assigns normalized relevance scores ($0.0 \le score \le 1.0$), specific reasons, and explicit limitations (e.g. dynamic imports and AST invocation graphs were not executed).
+   - Strict Grounding Invariant: Candidate files are strictly retained from the ingested file tree.
+
+---
+
+## 6. Realistic 100× Scaling Discussion (Future Work)
 
 At 100× active users or high concurrent traffic, PatchLoom's architecture would encounter specific upstream bottlenecks. Below is an honest engineering analysis of these limits and the planned future architecture:
 

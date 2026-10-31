@@ -2,7 +2,7 @@
 
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
-from app.analysis import analyze_repository
+from app.analysis import analyze_repository, analyze_repository_intelligence
 from app.config import settings
 from app.github_client import (
     GitHubUpstreamError,
@@ -20,8 +20,10 @@ from app.schemas import (
     AnalyzeRequest,
     AnalyzeResponse,
     HealthResponse,
+    IntelligenceRequest,
     PlanRequest,
     PlanResponse,
+    RepositoryIntelligenceReport,
 )
 
 router = APIRouter(prefix="/api")
@@ -55,6 +57,51 @@ async def analyze_repo_endpoint(request: AnalyzeRequest) -> AnalyzeResponse:
             repo_url=request.repo_url,
             profile=request.profile,
             provider_name=request.provider,
+            demo=request.demo or False,
+        )
+    except (InvalidGitHubURLError, UnsupportedProviderError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except RepoNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except RepoAccessError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(exc),
+        ) from exc
+    except RateLimitExceededError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=str(exc),
+        ) from exc
+    except GitHubUpstreamError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="GitHub API upstream service error. Please try again later.",
+        ) from exc
+    except Exception as exc:
+        request_id = str(uuid.uuid4())
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected internal error occurred (Request ID: {request_id})",
+        ) from exc
+
+
+@router.post(
+    "/intelligence",
+    response_model=RepositoryIntelligenceReport,
+    dependencies=[Depends(rate_limit("intelligence", lambda: settings.ANALYZE_RATE_LIMIT))],
+)
+async def analyze_intelligence_endpoint(request: IntelligenceRequest) -> RepositoryIntelligenceReport:
+    """Analyze a public GitHub repository and produce a structured repository intelligence report."""
+    try:
+        return await analyze_repository_intelligence(
+            repo_url=request.repo_url,
             demo=request.demo or False,
         )
     except (InvalidGitHubURLError, UnsupportedProviderError) as exc:

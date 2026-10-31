@@ -15,6 +15,7 @@ from app.schemas import (
     RepoMetadata,
     SignalEvidence,
 )
+from app.repo_intelligence import generate_repository_intelligence
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +55,7 @@ def get_fixture_data_for_url(repo_url: str) -> dict:
 
 def load_fixture_analysis(
     repo_url: str,
-    profile: ContributorProfile,
+    profile: Optional[ContributorProfile] = None,
     provider_name: Optional[str] = None,
 ) -> AnalyzeResponse:
     """Load an offline fixture analysis response with zero external network or model calls."""
@@ -119,6 +120,34 @@ def load_fixture_analysis(
         )
         candidates.append(c)
 
+    # Generate deterministic repository intelligence from fixture data
+    file_tree = data.get("file_tree", [])
+    docs = data.get("docs", {})
+    cand_dicts = [
+        {
+            "number": raw["number"],
+            "title": raw["title"],
+            "body": raw.get("body", "") or "",
+            "labels": raw.get("labels", []),
+        }
+        for raw in data.get("issues", [])
+    ]
+    intelligence = generate_repository_intelligence(
+        owner=repo_data["owner"],
+        repo_name=repo_data["name"],
+        languages=repo_data.get("languages", []),
+        file_tree=file_tree,
+        docs_metadata=docs,
+        ci_evidence=repo_meta.ci_evidence,
+        candidate_issues=cand_dicts,
+        is_truncated=repo_meta.tree_truncated,
+    )
+
+    if intelligence and intelligence.issue_mappings:
+        mapping_by_num = {m.issue_number: m for m in intelligence.issue_mappings}
+        for c in candidates:
+            c.module_mapping = mapping_by_num.get(c.number)
+
     # Determine ai_status
     any_fit = any(c.fit_score is not None for c in candidates)
     ai_status = "complete" if any_fit else "unavailable_or_invalid"
@@ -134,6 +163,7 @@ def load_fixture_analysis(
         ai_status=ai_status,
         issues=candidates,
         warnings=warnings,
+        intelligence=intelligence,
     )
 
 

@@ -122,10 +122,202 @@ class CandidateIssue(BaseModel):
     risks: list[str] = Field(default_factory=list)
     inferences: list[str] = Field(default_factory=list)
 
+    # Issue-to-module mapping (M1 Repository Intelligence)
+    module_mapping: Optional["IssueToModuleMapping"] = None
+
     checked_at: str = Field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
     truncated: bool = False
+
+
+# -------------------------------------------------------------
+# M1: Repository Intelligence Schemas
+# -------------------------------------------------------------
+
+
+class IntelligenceEvidence(BaseModel):
+    """Evidence supporting an intelligence finding."""
+
+    status: EvidenceStatus
+    source: str
+    observed_at: str = Field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
+    detail: Optional[str] = None
+
+
+class TechnologyItem(BaseModel):
+    """Detected technology, framework, library or build tool."""
+
+    name: str
+    category: Literal[
+        "framework", "library", "runtime", "tool", "ci_cd", "database", "bundler", "test_framework"
+    ]
+    evidence: IntelligenceEvidence
+    matched_paths: list[str] = Field(default_factory=list)
+
+
+class LanguageDistribution(BaseModel):
+    """Primary and secondary programming languages with provenance."""
+
+    primary: Optional[str] = None
+    secondary: list[str] = Field(default_factory=list)
+    source: str = "github_languages_and_tree"
+
+
+class EntryPoint(BaseModel):
+    """Identified key repository entry point or manifest."""
+
+    path: str
+    kind: Literal[
+        "application",
+        "library",
+        "cli",
+        "backend",
+        "frontend",
+        "configuration",
+        "manifest",
+        "build_deployment",
+        "documentation",
+    ]
+    confidence: Literal["detected", "candidate"]
+    reason: str
+    evidence: IntelligenceEvidence
+
+
+class TestProfile(BaseModel):
+    """Deterministic repository test infrastructure assessment."""
+
+    status: Literal["detected", "not_detected", "unknown"]
+    test_directories: list[str] = Field(default_factory=list)
+    test_file_count: int = 0
+    frameworks: list[str] = Field(default_factory=list)
+    configuration_files: list[str] = Field(default_factory=list)
+    ci_configuration: Optional[SignalEvidence] = None
+    likely_commands: list[str] = Field(default_factory=list)
+    evidence: IntelligenceEvidence
+    limitations: list[str] = Field(default_factory=list)
+
+
+class DocSectionSummary(BaseModel):
+    """Structured section extracted from repository documentation."""
+
+    heading: str
+    content_excerpt: str
+    category: Literal["purpose", "setup", "testing", "contributing", "architecture", "other"]
+
+
+class DocFileSummary(BaseModel):
+    """Summary of an inspected documentation file."""
+
+    path: str
+    doc_type: Literal["readme", "contributing", "architecture", "setup", "license", "other"]
+    exists: bool = True
+    key_sections: list[DocSectionSummary] = Field(default_factory=list)
+    extracted_purpose: Optional[str] = None
+    setup_commands: list[str] = Field(default_factory=list)
+    test_commands: list[str] = Field(default_factory=list)
+    evidence: IntelligenceEvidence
+
+
+class DocumentationProfile(BaseModel):
+    """Extracted documentation intelligence with bounded scope."""
+
+    has_readme: bool = False
+    has_contributing: bool = False
+    project_purpose: Optional[str] = None
+    docs: list[DocFileSummary] = Field(default_factory=list)
+    setup_instructions: Optional[str] = None
+    test_instructions: Optional[str] = None
+    contributing_guidelines_summary: Optional[str] = None
+    architecture_overview: Optional[str] = None
+    evidence: IntelligenceEvidence
+
+
+class ModuleSummary(BaseModel):
+    """Identified repository component or functional module."""
+
+    name: str
+    root_path: str
+    files: list[str] = Field(default_factory=list)
+    file_count: int = 0
+    likely_responsibility: str
+    component_type: Literal[
+        "core_logic",
+        "api_routes",
+        "ui_components",
+        "tests",
+        "configuration",
+        "documentation",
+        "utility",
+        "cli",
+        "service",
+    ]
+    confidence: Literal["high", "medium", "low"]
+    evidence: IntelligenceEvidence
+    key_entry_files: list[str] = Field(default_factory=list)
+
+
+class IssueCandidateMapping(BaseModel):
+    """Mapped candidate file for a specific GitHub issue."""
+
+    path: str
+    module_name: Optional[str] = None
+    relevance_score: float = Field(..., ge=0.0, le=1.0)
+    reasons: list[str] = Field(default_factory=list)
+    evidence: IntelligenceEvidence
+
+
+class IssueToModuleMapping(BaseModel):
+    """Deterministic connection between a GitHub issue and repository components."""
+
+    issue_number: int
+    issue_title: str
+    candidate_modules: list[str] = Field(default_factory=list)
+    candidate_files: list[IssueCandidateMapping] = Field(default_factory=list)
+    rationale: str
+    unknowns_and_limitations: list[str] = Field(default_factory=list)
+    evidence: IntelligenceEvidence
+
+
+class RepositoryIntelligenceReport(BaseModel):
+    """Comprehensive evidence-backed repository intelligence report."""
+
+    repo_owner: str
+    repo_name: str
+    languages: LanguageDistribution
+    project_type: Literal[
+        "web_application",
+        "api_service",
+        "library_or_sdk",
+        "cli_tool",
+        "monorepo",
+        "documentation_or_static",
+        "other",
+    ]
+    project_type_rationale: str
+    structure_type: Literal["monorepo", "single_package", "multi_module", "standard_flat"]
+    technologies: list[TechnologyItem] = Field(default_factory=list)
+    package_managers: list[str] = Field(default_factory=list)
+    manifest_files: list[str] = Field(default_factory=list)
+    configuration_files: list[str] = Field(default_factory=list)
+    entry_points: list[EntryPoint] = Field(default_factory=list)
+    test_profile: TestProfile
+    documentation_profile: DocumentationProfile
+    modules: list[ModuleSummary] = Field(default_factory=list)
+    issue_mappings: list[IssueToModuleMapping] = Field(default_factory=list)
+    inspected_paths_count: int = 0
+    tree_truncated: bool = False
+    evidence: IntelligenceEvidence
+    warnings: list[str] = Field(default_factory=list)
+
+
+class IntelligenceRequest(BaseModel):
+    """Request schema for POST /api/intelligence."""
+
+    repo_url: str = Field(..., description="Canonical GitHub repo URL (https://github.com/OWNER/REPO)")
+    demo: Optional[bool] = Field(default=False, description="Request fixture demo mode")
 
 
 class AnalyzeResponse(BaseModel):
@@ -136,6 +328,7 @@ class AnalyzeResponse(BaseModel):
     actual_model: str
     ai_status: Literal["complete", "partial", "unavailable_or_invalid"]
     issues: list[CandidateIssue] = Field(default_factory=list)
+    intelligence: Optional[RepositoryIntelligenceReport] = None
     warnings: list[str] = Field(default_factory=list)
 
 
@@ -195,3 +388,7 @@ class PlanResponse(BaseModel):
     checked_at: str = Field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
+
+
+# Resolve forward references
+CandidateIssue.model_rebuild()

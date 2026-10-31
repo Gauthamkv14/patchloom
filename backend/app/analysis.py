@@ -20,11 +20,13 @@ from app.providers.base import (
     QuotaExceededError,
     SafetyBlockedError,
 )
+from app.repo_intelligence import generate_repository_intelligence
 from app.schemas import (
     AnalyzeResponse,
     CandidateIssue,
     ContributorProfile,
     RepoMetadata,
+    RepositoryIntelligenceReport,
 )
 from app.signals import filter_and_rank_candidates
 
@@ -102,6 +104,38 @@ async def analyze_repository(
         max_candidates=settings.MAX_CANDIDATES,
     )
 
+    # Map candidate issue dicts for prompt builder and repo intelligence
+    cand_dicts = [
+        {
+            "number": c.number,
+            "title": c.title,
+            "body": next((i.get("body", "") for i in raw_issues if i.get("number") == c.number), ""),
+            "labels": c.labels,
+        }
+        for c in candidates
+    ]
+
+    # Deterministic Repository Intelligence Engine (M1)
+    intelligence_report: Optional[RepositoryIntelligenceReport] = None
+    try:
+        intelligence_report = generate_repository_intelligence(
+            owner=owner,
+            repo_name=repo_name,
+            languages=repo_meta.languages or [],
+            file_tree=file_paths,
+            docs_metadata=docs,
+            ci_evidence=repo_meta.ci_evidence,
+            candidate_issues=cand_dicts,
+            is_truncated=repo_meta.tree_truncated,
+        )
+    except Exception as exc:
+        logger.warning("Repository intelligence engine encountered an error: %s", exc)
+
+    if intelligence_report and intelligence_report.issue_mappings:
+        mapping_by_num = {m.issue_number: m for m in intelligence_report.issue_mappings}
+        for c in candidates:
+            c.module_mapping = mapping_by_num.get(c.number)
+
     if not candidates:
         warnings.append("No viable open candidate issues found matching initial criteria.")
         return AnalyzeResponse(
@@ -111,6 +145,7 @@ async def analyze_repository(
             ai_status="unavailable_or_invalid",
             issues=[],
             warnings=warnings,
+            intelligence=intelligence_report,
         )
 
     # 4. Check for Demo Mode or Missing Credentials
@@ -132,22 +167,12 @@ async def analyze_repository(
             ai_status="unavailable_or_invalid",
             issues=candidates,
             warnings=warnings,
+            intelligence=intelligence_report,
         )
 
     # 5. Execute Batched AI Fit Assessment
     provider = model_provider or get_provider(provider_name)
     valid_paths_set = set(file_paths)
-
-    # Map candidate issue dicts for prompt builder
-    cand_dicts = [
-        {
-            "number": c.number,
-            "title": c.title,
-            "body": next((i.get("body", "") for i in raw_issues if i.get("number") == c.number), ""),
-            "labels": c.labels,
-        }
-        for c in candidates
-    ]
 
     prompt_text, is_truncated = build_fit_prompt(
         profile_data=profile.model_dump(),
@@ -238,4 +263,75 @@ async def analyze_repository(
         ai_status=ai_status,  # type: ignore
         issues=candidates,
         warnings=warnings,
+        intelligence=intelligence_report,
     )
+
+
+async def analyze_repository_intelligence(
+    repo_url: str,
+    demo: bool = False,
+    github_client: Optional[GitHubClient] = None,
+) -> RepositoryIntelligenceReport:
+    """
+    Execute standalone deterministic repository intelligence analysis.
+    Does not require AI models or API keys.
+    """
+    owner, repo_name = parse_and_validate_github_url(repo_url)
+
+    if demo or settings.DEMO_MODE:
+        fixture_resp = load_fixture_analysis(
+            repo_url=repo_url,
+        )
+        if fixture_resp.intelligence:
+            return fixture_resp.intelligence
+
+    gh = github_client or GitHubClient()
+
+    # 1. Fetch metadata, docs, and file tree
+    repo_meta = await gh.fetch_repo_metadata(owner, repo_name)
+    docs = await gh.fetch_documentation(owner, repo_name)
+    file_paths, gh_trunc, app_trunc = await gh.fetch_file_tree(
+        owner, repo_name, repo_meta.default_branch
+    )
+    is_truncated = gh_trunc or app_trunc
+
+    # 2. CI Detection with provenance
+    ci_evidence = None
+    if hasattr(gh, "detect_ci") and callable(gh.detect_ci):
+        try:
+            _, ci_evidence = await gh.detect_ci(
+                owner, repo_name, repo_meta.default_branch
+            )
+        except Exception as exc:
+            logger.warning("CI detection error in standalone intelligence: %s", exc)
+
+    # 3. Open Issues (bounded for issue-to-module mapping)
+    cand_dicts: list[dict] = []
+    try:
+        raw_issues = await gh.fetch_open_issues(owner, repo_name, max_pages=1)
+        cand_dicts = [
+            {
+                "number": i.get("number", 0),
+                "title": i.get("title", ""),
+                "body": i.get("body", "") or "",
+                "labels": [
+                    label.get("name") if isinstance(label, dict) else str(label)
+                    for label in i.get("labels", [])
+                ],
+            }
+            for i in raw_issues[: settings.MAX_CANDIDATES]
+        ]
+    except Exception as exc:
+        logger.warning("Issue fetching error in standalone intelligence: %s", exc)
+
+    return generate_repository_intelligence(
+        owner=owner,
+        repo_name=repo_name,
+        languages=repo_meta.languages or [],
+        file_tree=file_paths,
+        docs_metadata=docs,
+        ci_evidence=ci_evidence,
+        candidate_issues=cand_dicts,
+        is_truncated=is_truncated,
+    )
+

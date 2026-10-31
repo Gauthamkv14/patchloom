@@ -4,6 +4,7 @@ import { InputForm } from './components/InputForm';
 import { EvidenceLegend } from './components/EvidenceLegend';
 import { IssueCard } from './components/IssueCard';
 import { PlanModal } from './components/PlanModal';
+import { RepoIntelligenceView } from './components/RepoIntelligenceView';
 
 export default function App() {
   const [health, setHealth] = useState<HealthData | null>(null);
@@ -184,6 +185,10 @@ export default function App() {
                 </div>
               )}
             </div>
+
+            {analysisResult.intelligence && (
+              <RepoIntelligenceView intelligence={analysisResult.intelligence} />
+            )}
 
             <EvidenceLegend />
 
