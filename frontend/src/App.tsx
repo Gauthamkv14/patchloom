@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { AnalyzeResponse, CandidateIssue, ContributorProfile, HealthData, PlanResponse } from './types';
+import { AnalyzeResponse, CandidateIssue, ContributorProfile, HealthData, IssueLearningBrief, PlanResponse } from './types';
 import { InputForm } from './components/InputForm';
 import { EvidenceLegend } from './components/EvidenceLegend';
 import { IssueCard } from './components/IssueCard';
 import { PlanModal } from './components/PlanModal';
+import { LearnModal } from './components/LearnModal';
 import { RepoIntelligenceView } from './components/RepoIntelligenceView';
 
 export default function App() {
@@ -18,6 +19,10 @@ export default function App() {
   const [planningIssueId, setPlanningIssueId] = useState<number | null>(null);
   const [activePlan, setActivePlan] = useState<PlanResponse | null>(null);
   const [planError, setPlanError] = useState<string | null>(null);
+
+  const [learningIssueId, setLearningIssueId] = useState<number | null>(null);
+  const [activeLearningBrief, setActiveLearningBrief] = useState<IssueLearningBrief | null>(null);
+  const [learnError, setLearnError] = useState<string | null>(null);
 
   const [currentRepoUrl, setCurrentRepoUrl] = useState<string>('');
   const [currentProfile, setCurrentProfile] = useState<ContributorProfile | null>(null);
@@ -102,6 +107,37 @@ export default function App() {
     }
   };
 
+  const handleSelectLearn = async (issue: CandidateIssue) => {
+    if (!currentProfile || !currentRepoUrl) return;
+
+    setLearningIssueId(issue.number);
+    setLearnError(null);
+
+    try {
+      const resp = await fetch('/api/learn', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          repo_url: currentRepoUrl,
+          issue_number: issue.number,
+          profile: currentProfile,
+          demo: currentDemo,
+        }),
+      });
+
+      const data = await resp.json();
+      if (!resp.ok) {
+        throw new Error(data.detail || data.error || `HTTP ${resp.status}`);
+      }
+
+      setActiveLearningBrief(data);
+    } catch (err: any) {
+      setLearnError(`Failed to generate learning brief for #${issue.number}: ${err.message}`);
+    } finally {
+      setLearningIssueId(null);
+    }
+  };
+
   return (
     <div className="container">
       <header>
@@ -142,6 +178,12 @@ export default function App() {
         {planError && (
           <div className="error-banner">
             <strong>Planning Error:</strong> {planError}
+          </div>
+        )}
+
+        {learnError && (
+          <div className="error-banner">
+            <strong>Learning Error:</strong> {learnError}
           </div>
         )}
 
@@ -211,6 +253,8 @@ export default function App() {
                       rank={idx + 1}
                       onSelectPlan={handleSelectPlan}
                       isPlanningThis={planningIssueId === issue.number}
+                      onSelectLearn={handleSelectLearn}
+                      isLearningThis={learningIssueId === issue.number}
                     />
                   ))}
                 </div>
@@ -222,6 +266,10 @@ export default function App() {
 
       {activePlan && (
         <PlanModal plan={activePlan} onClose={() => setActivePlan(null)} />
+      )}
+
+      {activeLearningBrief && (
+        <LearnModal brief={activeLearningBrief} onClose={() => setActiveLearningBrief(null)} />
       )}
     </div>
   );

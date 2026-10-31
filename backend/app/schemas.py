@@ -390,5 +390,113 @@ class PlanResponse(BaseModel):
     )
 
 
+# -------------------------------------------------------------
+# M2: Intelligent Issue Learning Brief Schemas (LEARN Pillar)
+# -------------------------------------------------------------
+
+
+class IssueExplanation(BaseModel):
+    """Personalized, multi-facet plain-language explanation of a GitHub issue."""
+
+    summary: str = Field(..., description="High-level plain-language summary adapted to experience level")
+    problem_description: str = Field(..., description="Core problem or defect being reported")
+    why_it_matters: Optional[str] = Field(default=None, description="Impact and rationale supported by evidence")
+    expected_outcome: str = Field(..., description="Expected behavior once resolved")
+    explicit_requirements: list[str] = Field(default_factory=list, description="Explicit requirements stated in the issue")
+    constraints_and_conditions: list[str] = Field(default_factory=list, description="Constraints, edge cases, or conditions mentioned")
+    ambiguities_and_unanswered_questions: list[str] = Field(default_factory=list, description="Unclear areas, missing reproduction details, or maintainer questions")
+    experience_adaptation_note: str = Field(..., description="Explanation of how this brief is adapted to the contributor's experience level")
+
+
+class IssueRequirement(BaseModel):
+    """Structured requirement extracted from issue text or comments."""
+
+    description: str = Field(..., description="Requirement description")
+    source: str = Field(..., description="Source: issue_description | issue_comment | repository_docs")
+    supporting_evidence: str = Field(..., description="Verbatim or close excerpt supporting this requirement")
+    classification: Literal["explicit", "inferred"] = Field(..., description="Whether explicitly stated or inferred")
+    confidence: Literal["high", "medium", "low"] = Field(default="medium", description="Confidence in this requirement")
+
+
+class RelevantInvestigationFile(BaseModel):
+    """Grounded repository file target with exploration instructions."""
+
+    path: str = Field(..., description="File path strictly verified in repository tree")
+    module_name: Optional[str] = Field(default=None, description="Logical component or module name")
+    why_relevant: str = Field(..., description="Why this file is relevant to the issue")
+    what_to_inspect: str = Field(..., description="Specific classes, functions, or patterns to inspect")
+    kind: Literal["detected", "candidate"] = Field(default="candidate", description="Detected direct entrypoint or heuristic candidate")
+    evidence: IntelligenceEvidence
+
+
+class LearningConcept(BaseModel):
+    """Technical concept to master before or while working on this issue."""
+
+    name: str = Field(..., description="Concept name (e.g. Asynchronous I/O, Socket Timeout, RST syntax)")
+    explanation: str = Field(..., description="Beginner-friendly explanation of the concept")
+    why_it_matters: str = Field(..., description="Why understanding this concept is essential for this issue")
+    prerequisites: list[str] = Field(default_factory=list, description="Prerequisite knowledge or foundational concepts")
+    learning_order: int = Field(default=1, ge=1, le=10, description="Suggested sequence order for learning")
+    difficulty: Literal["beginner", "intermediate", "advanced"] = Field(default="beginner", description="Difficulty level")
+
+
+class LearningObjective(BaseModel):
+    """Actionable, measurable educational objective for the contributor."""
+
+    title: str = Field(..., description="Short objective title")
+    description: str = Field(..., description="What the contributor will understand or identify")
+    relevance: str = Field(..., description="Why this objective matters for solving the issue")
+    completion_criterion: str = Field(..., description="How the contributor knows they achieved this objective")
+
+
+class ReadinessChecklistItem(BaseModel):
+    """Practical readiness checklist item to assess understanding before coding."""
+
+    category: Literal[
+        "problem_understanding",
+        "expected_behavior",
+        "architecture_components",
+        "technical_concepts",
+        "testing_approach",
+        "remaining_uncertainties",
+    ] = Field(..., description="Readiness dimension")
+    item: str = Field(..., description="Readiness check question or statement")
+    guidance: str = Field(..., description="Self-check guidance on how to confirm readiness")
+
+
+class IssueLearningBrief(BaseModel):
+    """Complete structured Issue Learning Brief for a selected issue (M2 - LEARN Pillar)."""
+
+    issue_number: int
+    issue_title: str
+    issue_url: str
+    experience_level: Literal["beginner", "intermediate", "advanced"]
+    explanation: IssueExplanation
+    requirements: list[IssueRequirement] = Field(default_factory=list)
+    relevant_modules: list[str] = Field(default_factory=list)
+    investigation_targets: list[RelevantInvestigationFile] = Field(default_factory=list)
+    related_tests_and_docs: list[str] = Field(default_factory=list)
+    concepts: list[LearningConcept] = Field(default_factory=list)
+    learning_objectives: list[LearningObjective] = Field(default_factory=list)
+    readiness_checklist: list[ReadinessChecklistItem] = Field(default_factory=list)
+    unresolved_questions: list[str] = Field(default_factory=list)
+    ai_status: Literal["complete", "unavailable_or_invalid"]
+    warnings: list[str] = Field(default_factory=list)
+    evidence: IntelligenceEvidence
+    checked_at: str = Field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
+
+
+class LearnRequest(BaseModel):
+    """Request schema for POST /api/learn."""
+
+    repo_url: str = Field(..., description="Canonical GitHub repo URL (https://github.com/OWNER/REPO)")
+    issue_number: int = Field(..., description="GitHub issue number to generate learning brief for")
+    profile: ContributorProfile
+    provider: Optional[str] = Field(default=None, description="Optional explicit model provider")
+    demo: Optional[bool] = Field(default=False, description="Request fixture demo mode")
+
+
 # Resolve forward references
 CandidateIssue.model_rebuild()

@@ -224,3 +224,79 @@ export interface PlanResponse {
   warnings: string[];
   checked_at: string;
 }
+
+export interface IssueExplanation {
+  summary: string;
+  problem_description: string;
+  why_it_matters?: string | null;
+  expected_outcome: string;
+  explicit_requirements: string[];
+  constraints_and_conditions: string[];
+  ambiguities_and_unanswered_questions: string[];
+  experience_adaptation_note: string;
+}
+
+export interface IssueRequirement {
+  description: string;
+  source: string;
+  supporting_evidence: string;
+  classification: 'explicit' | 'inferred';
+  confidence: 'high' | 'medium' | 'low';
+}
+
+export interface RelevantInvestigationFile {
+  path: string;
+  module_name?: string | null;
+  why_relevant: string;
+  what_to_inspect: string;
+  kind: 'detected' | 'candidate';
+  evidence: IntelligenceEvidence;
+}
+
+export interface LearningConcept {
+  name: string;
+  explanation: string;
+  why_it_matters: string;
+  prerequisites: string[];
+  learning_order: number;
+  difficulty: 'beginner' | 'intermediate' | 'advanced';
+}
+
+export interface LearningObjective {
+  title: string;
+  description: string;
+  relevance: string;
+  completion_criterion: string;
+}
+
+export interface ReadinessChecklistItem {
+  category:
+    | 'problem_understanding'
+    | 'expected_behavior'
+    | 'architecture_components'
+    | 'technical_concepts'
+    | 'testing_approach'
+    | 'remaining_uncertainties';
+  item: string;
+  guidance: string;
+}
+
+export interface IssueLearningBrief {
+  issue_number: number;
+  issue_title: string;
+  issue_url: string;
+  experience_level: 'beginner' | 'intermediate' | 'advanced';
+  explanation: IssueExplanation;
+  requirements: IssueRequirement[];
+  relevant_modules: string[];
+  investigation_targets: RelevantInvestigationFile[];
+  related_tests_and_docs: string[];
+  concepts: LearningConcept[];
+  learning_objectives: LearningObjective[];
+  readiness_checklist: ReadinessChecklistItem[];
+  unresolved_questions: string[];
+  ai_status: 'complete' | 'unavailable_or_invalid';
+  warnings: string[];
+  evidence: IntelligenceEvidence;
+  checked_at: string;
+}

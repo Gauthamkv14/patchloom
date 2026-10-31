@@ -13,6 +13,7 @@ from app.github_client import (
     RepoAccessError,
     RepoNotFoundError,
 )
+from app.learning import generate_issue_learning_brief
 from app.planner import generate_first_pr_plan
 from app.providers import UnsupportedProviderError
 from app.rate_limit import rate_limit
@@ -21,6 +22,8 @@ from app.schemas import (
     AnalyzeResponse,
     HealthResponse,
     IntelligenceRequest,
+    IssueLearningBrief,
+    LearnRequest,
     PlanRequest,
     PlanResponse,
     RepositoryIntelligenceReport,
@@ -189,3 +192,55 @@ async def generate_plan_endpoint(request: PlanRequest) -> PlanResponse:
             detail=f"An unexpected internal error occurred (Request ID: {request_id})",
         ) from exc
 
+
+@router.post(
+    "/learn",
+    response_model=IssueLearningBrief,
+    dependencies=[Depends(rate_limit("learn", lambda: settings.LEARN_RATE_LIMIT))],
+)
+async def generate_learn_endpoint(request: LearnRequest) -> IssueLearningBrief:
+    """Generate a structured Issue Learning Brief for a selected open GitHub issue."""
+    try:
+        return await generate_issue_learning_brief(
+            repo_url=request.repo_url,
+            issue_number=request.issue_number,
+            profile=request.profile,
+            provider_name=request.provider,
+            demo=request.demo or False,
+        )
+    except (InvalidGitHubURLError, UnsupportedProviderError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except IssueClosedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except (RepoNotFoundError, IssueNotFoundError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except RepoAccessError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(exc),
+        ) from exc
+    except RateLimitExceededError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=str(exc),
+        ) from exc
+    except GitHubUpstreamError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="GitHub API upstream service error. Please try again later.",
+        ) from exc
+    except Exception as exc:
+        request_id = str(uuid.uuid4())
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected internal error occurred (Request ID: {request_id})",
+        ) from exc

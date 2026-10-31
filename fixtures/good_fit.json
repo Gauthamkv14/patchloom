@@ -220,5 +220,193 @@
         "Demo/Fixture mode active. Showing validated offline snapshot data."
       ]
     }
+  },
+  "learning_briefs": {
+    "6542": {
+      "issue_number": 6542,
+      "issue_title": "Improve timeout documentation and example for streaming requests",
+      "issue_url": "https://github.com/psf/requests/issues/6542",
+      "experience_level": "intermediate",
+      "explanation": {
+        "summary": "Clarify how socket connect vs read timeouts apply during chunked streaming responses in requests.",
+        "problem_description": "The documentation in docs/user/advanced.rst mentions passing stream=True, but does not clearly explain how timeouts apply to chunk iteration vs initial connection, causing users to hang indefinitely.",
+        "why_it_matters": "Proper timeout handling prevents production network connections from hanging indefinitely during chunked data streaming.",
+        "expected_outcome": "Clear documentation explaining connect vs read timeouts with a working code example in the advanced user guide.",
+        "explicit_requirements": [
+          "Explain connect vs read timeout differences when stream=True.",
+          "Provide copy-pasteable example of tuple timeout."
+        ],
+        "constraints_and_conditions": [
+          "Preserve existing reStructuredText formatting and cross-references.",
+          "Must compile cleanly with Sphinx without doc build warnings.",
+          "Code examples must adhere to Requests API conventions."
+        ],
+        "ambiguities_and_unanswered_questions": [
+          "Whether quickstart documentation should also cross-link to this clarification."
+        ],
+        "experience_adaptation_note": "Adapted for intermediate contributors: focuses on component interactions, architecture integration, and existing test patterns."
+      },
+      "requirements": [
+        {
+          "description": "Clarify that connect timeout applies to initial handshake and read timeout applies to each socket read.",
+          "source": "issue_description",
+          "supporting_evidence": "streaming requests section in docs/user/advanced.rst mentions passing stream=True, but does not clearly illustrate how timeout applies to chunk iteration",
+          "classification": "explicit",
+          "confidence": "high"
+        },
+        {
+          "description": "Provide a copy-pasteable Python snippet demonstrating stream=True with a tuple timeout.",
+          "source": "issue_description",
+          "supporting_evidence": "Clarifying this with an example snippet would help new users avoid hanging indefinitely.",
+          "classification": "explicit",
+          "confidence": "high"
+        },
+        {
+          "description": "Ensure Sphinx documentation builds without syntax errors or warnings.",
+          "source": "repository_docs",
+          "supporting_evidence": "Documentation in docs/ requires clean make html build.",
+          "classification": "inferred",
+          "confidence": "high"
+        }
+      ],
+      "relevant_modules": [
+        "docs"
+      ],
+      "investigation_targets": [
+        {
+          "path": "docs/user/advanced.rst",
+          "module_name": "docs",
+          "why_relevant": "Primary documentation file containing the streaming requests section.",
+          "what_to_inspect": "Locate the 'Streaming Requests' section and check how stream=True and iter_content() are currently explained.",
+          "kind": "detected",
+          "evidence": {
+            "status": "verified",
+            "source": "issue_body_path_mention",
+            "observed_at": "2026-10-18T10:00:00Z",
+            "detail": "Mentioned explicitly in issue body."
+          }
+        },
+        {
+          "path": "docs/user/quickstart.rst",
+          "module_name": "docs",
+          "why_relevant": "Basic timeout documentation may need cross-referencing or consistency check.",
+          "what_to_inspect": "Review basic Timeouts section to ensure terminology aligns with advanced stream timeouts.",
+          "kind": "candidate",
+          "evidence": {
+            "status": "inference",
+            "source": "docs_module_mapping",
+            "observed_at": "2026-10-18T10:00:00Z",
+            "detail": "Candidate doc file in same docs module."
+          }
+        },
+        {
+          "path": "docs/Makefile",
+          "module_name": "docs",
+          "why_relevant": "Build script to compile documentation locally.",
+          "what_to_inspect": "Run make html to ensure doc builds pass locally.",
+          "kind": "candidate",
+          "evidence": {
+            "status": "inference",
+            "source": "docs_build_tool",
+            "observed_at": "2026-10-18T10:00:00Z",
+            "detail": "Sphinx Makefile."
+          }
+        }
+      ],
+      "related_tests_and_docs": [
+        "docs/user/advanced.rst",
+        "docs/user/quickstart.rst",
+        "CONTRIBUTING.md"
+      ],
+      "concepts": [
+        {
+          "name": "Socket Connect vs Read Timeouts",
+          "explanation": "Connect timeout governs establishing TCP connection; read timeout limits wait time between subsequent chunks.",
+          "why_it_matters": "When streaming large payloads, read timeouts reset for every chunk read, whereas connect timeout only applies at connection establishment.",
+          "prerequisites": [
+            "Basic TCP networking",
+            "HTTP protocol basics"
+          ],
+          "learning_order": 1,
+          "difficulty": "intermediate"
+        },
+        {
+          "name": "Chunked HTTP Streaming (iter_content)",
+          "explanation": "Downloading large HTTP bodies in chunks instead of loading the entire payload into RAM at once.",
+          "why_it_matters": "Essential for high-throughput and memory-constrained applications.",
+          "prerequisites": [
+            "Python generators and iterators"
+          ],
+          "learning_order": 2,
+          "difficulty": "beginner"
+        },
+        {
+          "name": "Sphinx & reStructuredText (RST)",
+          "explanation": "The documentation engine and markup format used across Python core libraries.",
+          "why_it_matters": "Documentation contributions require correct directive indentation and cross-referencing.",
+          "prerequisites": [
+            "Basic markdown or markup syntax"
+          ],
+          "learning_order": 3,
+          "difficulty": "beginner"
+        }
+      ],
+      "learning_objectives": [
+        {
+          "id": "obj-1",
+          "title": "Master HTTP Timeout Mechanics in Streaming",
+          "description": "Understand how tuple timeouts (connect, read) behave when consuming response streams.",
+          "relevance": "Prevents hanging sockets in production when consuming chunked streams.",
+          "completion_criterion": "Can explain when read timeout triggers during iter_content() execution."
+        },
+        {
+          "id": "obj-2",
+          "title": "Author Clean Sphinx Documentation",
+          "description": "Write idiomatic reStructuredText with proper code directives and cross-references.",
+          "relevance": "Standard documentation workflow for Python open-source projects.",
+          "completion_criterion": "docs build locally using make html with zero warnings."
+        }
+      ],
+      "readiness_checklist": [
+        {
+          "id": "chk-1",
+          "category": "problem_understanding",
+          "item": "Do you understand the difference between connect and read timeouts?",
+          "guidance": "Verify you can explain what happens if a server connects but stops sending chunks."
+        },
+        {
+          "id": "chk-2",
+          "category": "architecture_components",
+          "item": "Can you locate the Streaming Requests section in docs/user/advanced.rst?",
+          "guidance": "Confirm line numbers and heading structure before making edits."
+        },
+        {
+          "id": "chk-3",
+          "category": "testing_approach",
+          "item": "Can you build the Sphinx documentation locally?",
+          "guidance": "Check that _build/html/user/advanced.html renders correctly in a web browser."
+        },
+        {
+          "id": "chk-4",
+          "category": "expected_behavior",
+          "item": "Do you know the PR conventions for documentation in this repo?",
+          "guidance": "Ensure your commit message references issue #6542."
+        }
+      ],
+      "unresolved_questions": [
+        "Should we also cross-reference this in docs/user/quickstart.rst under the basic Timeouts section?"
+      ],
+      "ai_status": "complete",
+      "warnings": [
+        "Demo/Fixture mode active. Showing validated offline snapshot data."
+      ],
+      "evidence": {
+        "status": "verified",
+        "source": "fixture_snapshot",
+        "observed_at": "2026-10-18T10:00:00Z",
+        "detail": "Validated offline snapshot learning brief."
+      },
+      "checked_at": "2026-10-18T10:00:00Z"
+    }
   }
 }

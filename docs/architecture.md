@@ -175,7 +175,42 @@ The engine runs concurrently during repository analysis (`POST /api/analyze`) an
 
 ---
 
-## 6. Realistic 100× Scaling Discussion (Future Work)
+## 6. Intelligent Issue Learning Engine (LEARN Pillar — M2)
+
+The Issue Learning Engine bridges repository intelligence and issue discovery to prepare contributors to work on unfamiliar issues independently, prioritizing learning over automated code generation.
+
+1. **Personalized Multi-Facet Issue Explanation:**
+   - Adapts technical depth and tone to the contributor's experience level (`beginner`, `intermediate`, `advanced`).
+   - Generates executive summary, problem description, impact rationale, expected outcome, constraints, and explicit ambiguities/unanswered questions.
+   - Clarifies missing reproduction details or vague requirements so contributors can formulate targeted questions for maintainers.
+
+2. **Requirements Extraction & Epistemic Classification:**
+   - Breaks down issue text and comments into concrete, testable requirements.
+   - Classifies each requirement as `explicit` (directly stated by author/maintainer) or `inferred` (logical deduction based on context), paired with verbatim evidence excerpts and confidence levels.
+
+3. **Grounded Codebase Context & Investigation Targets:**
+   - Integrates M1 logical modules and file tree heuristics.
+   - Generates investigation targets with specific exploration guidance (what functions, classes, or docs to inspect).
+   - Strict Grounding Invariant: Hallucinated file paths are dropped; all suggested investigation targets must exist in the verified repository file tree.
+
+4. **Technical Concept Sequencing & Difficulty Ranking:**
+   - Identifies prerequisite domain and library concepts necessary to understand the issue.
+   - Sequences concepts in recommended learning order ($1 \le order \le 10$) with difficulty rankings and foundational prerequisites.
+
+5. **Measurable Learning Objectives:**
+   - Provides concrete educational milestones (what to locate, understand, and verify) before modifying code.
+   - Defines clear completion criteria for each objective.
+
+6. **Interactive Understanding Readiness Checklist:**
+   - Spans 6 critical self-check dimensions: `problem_understanding`, `expected_behavior`, `architecture_components`, `technical_concepts`, `testing_approach`, and `remaining_uncertainties`.
+   - Empowers contributors to self-assess comprehension with actionable guidance hints before starting implementation.
+
+7. **Zero-AI Deterministic Fallback Invariant:**
+   - When AI model inference is unavailable, in demo mode, or encounters quota/network failures, the engine generates an evidence-backed deterministic brief preserving all extracted issue requirements, grounded module mappings, and readiness items, setting `ai_status="unavailable_or_invalid"`.
+
+---
+
+## 7. Realistic 100× Scaling Discussion (Future Work)
 
 At 100× active users or high concurrent traffic, PatchLoom's architecture would encounter specific upstream bottlenecks. Below is an honest engineering analysis of these limits and the planned future architecture:
 

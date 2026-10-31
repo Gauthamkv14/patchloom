@@ -6,6 +6,8 @@ interface IssueCardProps {
   rank: number;
   onSelectPlan: (issue: CandidateIssue) => void;
   isPlanningThis: boolean;
+  onSelectLearn?: (issue: CandidateIssue) => void;
+  isLearningThis?: boolean;
 }
 
 export const IssueCard: React.FC<IssueCardProps> = ({
@@ -13,6 +15,8 @@ export const IssueCard: React.FC<IssueCardProps> = ({
   rank,
   onSelectPlan,
   isPlanningThis,
+  onSelectLearn,
+  isLearningThis,
 }) => {
   const [expanded, setExpanded] = useState(false);
 
@@ -86,6 +90,18 @@ export const IssueCard: React.FC<IssueCardProps> = ({
         >
           {expanded ? '▲ Hide Signals & Evidence' : '▼ Inspect Signals & Evidence'}
         </button>
+
+        {onSelectLearn && (
+          <button
+            type="button"
+            className="btn-secondary learn-btn"
+            onClick={() => onSelectLearn(issue)}
+            disabled={isLearningThis}
+            style={{ fontWeight: 600, borderColor: '#6366f1', color: '#4f46e5' }}
+          >
+            {isLearningThis ? 'Generating Brief...' : '🧠 Learn & Understand'}
+          </button>
+        )}
 
         <button
           type="button"

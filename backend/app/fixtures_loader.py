@@ -2,6 +2,7 @@
 
 import json
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -9,13 +10,24 @@ from app.schemas import (
     AnalyzeResponse,
     CandidateIssue,
     ContributorProfile,
+    IntelligenceEvidence,
+    IssueExplanation,
+    IssueLearningBrief,
+    IssueRequirement,
+    LearningConcept,
+    LearningObjective,
     PlanNote,
     PlanResponse,
     PlanStep,
+    ReadinessChecklistItem,
+    RelevantInvestigationFile,
     RepoMetadata,
     SignalEvidence,
 )
-from app.repo_intelligence import generate_repository_intelligence
+from app.repo_intelligence import (
+    generate_repository_intelligence,
+    map_issue_to_repository_modules,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -262,3 +274,202 @@ def load_fixture_plan(
         ai_status=plan_data.get("ai_status", "complete"),
         warnings=plan_data.get("warnings", ["Demo/Fixture mode active."]),
     )
+
+
+def load_fixture_learn(
+    repo_url: str,
+    issue_number: int,
+    profile: Optional[ContributorProfile] = None,
+) -> IssueLearningBrief:
+    """Load an offline fixture issue learning brief with zero external network or model calls."""
+    data = get_fixture_data_for_url(repo_url)
+    briefs = data.get("learning_briefs", {})
+    brief_data = briefs.get(str(issue_number))
+    observed = datetime.now(timezone.utc).isoformat()
+    level = profile.experience_level if profile else "beginner"
+
+    if not brief_data:
+        # Construct deterministic brief from fixture data
+        matched_issue = next((i for i in data.get("issues", []) if i["number"] == issue_number), None)
+        title = matched_issue["title"] if matched_issue else f"Issue #{issue_number}"
+        url = matched_issue["url"] if matched_issue else f"{repo_url}/issues/{issue_number}"
+        body = matched_issue.get("body", "") if matched_issue else ""
+        tree = data.get("file_tree", [])
+        docs = data.get("docs", {})
+        repo_data = data.get("repo", {})
+
+        # Compute intelligence to map modules
+        intel = generate_repository_intelligence(
+            owner=repo_data.get("owner", "org"),
+            repo_name=repo_data.get("name", "repo"),
+            languages=repo_data.get("languages", []),
+            file_tree=tree,
+            docs_metadata=docs,
+            candidate_issues=[{"number": issue_number, "title": title, "body": body, "labels": matched_issue.get("labels", []) if matched_issue else []}],
+            is_truncated=repo_data.get("tree_truncated", False),
+        )
+
+        mapping = map_issue_to_repository_modules(
+            issue={"number": issue_number, "title": title, "body": body, "labels": matched_issue.get("labels", []) if matched_issue else []},
+            file_tree=tree,
+            modules=intel.modules,
+            docs_text=docs.get("readme_excerpt", ""),
+        )
+
+        investigation_targets = [
+            RelevantInvestigationFile(
+                path=c.path,
+                module_name=c.module_name,
+                why_relevant=f"Fixture target identified via keyword overlap ({'; '.join(c.reasons[:2])}).",
+                what_to_inspect="Review function signatures, documentation strings, or error checks.",
+                kind="candidate",
+                evidence=c.evidence,
+            )
+            for c in mapping.candidate_files[:3]
+        ]
+        if not investigation_targets:
+            fallback_files = [p for p in tree if any(k in p.lower() for k in ("main", "doc", "test", "src"))][:2]
+            for f in fallback_files:
+                investigation_targets.append(
+                    RelevantInvestigationFile(
+                        path=f,
+                        module_name="general",
+                        why_relevant="Plausible core file from repository tree.",
+                        what_to_inspect="Review code structure and tests.",
+                        kind="candidate",
+                        evidence=IntelligenceEvidence(
+                            status="inference",
+                            source="fixture_tree",
+                            observed_at=observed,
+                            detail=f"Candidate path {f}.",
+                        ),
+                    )
+                )
+
+        explanation = IssueExplanation(
+            summary=f"Offline learning brief for #{issue_number}: '{title}'.",
+            problem_description=f"Issue #{issue_number} reports an improvement or bug in the repository component.",
+            why_it_matters="Resolving this issue improves developer ergonomics and project documentation clarity.",
+            expected_outcome=f"Clear, tested resolution of #{issue_number} matching contributor expectations.",
+            explicit_requirements=[f"Address requirements stated in #{issue_number}."],
+            constraints_and_conditions=["Ensure compatibility with existing tests and contributor guidelines."],
+            ambiguities_and_unanswered_questions=[],
+            experience_adaptation_note=f"Adapted for {level} level: emphasizes foundational clarity and guided investigation targets.",
+        )
+
+        concepts = [
+            LearningConcept(
+                name="Repository Architecture & Layout",
+                explanation="How files, tests, and documentation are organized across this repository.",
+                why_it_matters="Helps you identify which module is responsible for the behavior.",
+                prerequisites=["Basic Git version control"],
+                learning_order=1,
+                difficulty="beginner",
+            ),
+            LearningConcept(
+                name="Test Suite Verification",
+                explanation="Running unit tests locally to verify expected behavior.",
+                why_it_matters="Ensures proposed changes do not cause regressions.",
+                prerequisites=["Command-line terminal"],
+                learning_order=2,
+                difficulty="beginner",
+            ),
+        ]
+
+        objectives = [
+            LearningObjective(
+                title="Locate the Target Code",
+                description=f"Inspect {', '.join(t.path for t in investigation_targets[:2])} to understand current implementation.",
+                relevance="Grounds your contribution in actual repository code.",
+                completion_criterion="You can locate the functions or documentation sections being modified.",
+            ),
+            LearningObjective(
+                title="Verify Local Test Execution",
+                description="Run the repository test suite locally.",
+                relevance="Validates your local development environment before writing code.",
+                completion_criterion="Existing tests execute and pass without unexpected errors.",
+            ),
+        ]
+
+        checklist = [
+            ReadinessChecklistItem(
+                category="problem_understanding",
+                item=f"Can you explain the problem in #{issue_number} in your own words?",
+                guidance="Draft a 2-sentence summary of the expected change.",
+            ),
+            ReadinessChecklistItem(
+                category="architecture_components",
+                item="Have you inspected the candidate investigation files?",
+                guidance=f"Check {', '.join(t.path for t in investigation_targets[:2])}.",
+            ),
+            ReadinessChecklistItem(
+                category="testing_approach",
+                item="Do you know how to run tests locally for this component?",
+                guidance="Refer to the repository's test guidelines or documentation.",
+            ),
+        ]
+
+        return IssueLearningBrief(
+            issue_number=issue_number,
+            issue_title=title,
+            issue_url=url,
+            experience_level=level,  # type: ignore
+            explanation=explanation,
+            requirements=[
+                IssueRequirement(
+                    description=f"Address issue #{issue_number}: {title}",
+                    source="issue_description",
+                    supporting_evidence=title,
+                    classification="explicit",
+                    confidence="high",
+                )
+            ],
+            relevant_modules=mapping.candidate_modules,
+            investigation_targets=investigation_targets,
+            related_tests_and_docs=[f"{d}/" for d in intel.test_profile.test_directories] + (["README.md"] if intel.documentation_profile.has_readme else []),
+            concepts=concepts,
+            learning_objectives=objectives,
+            readiness_checklist=checklist,
+            unresolved_questions=[],
+            ai_status="complete",
+            warnings=["Demo/Fixture mode active. Showing validated offline snapshot learning brief."],
+            evidence=IntelligenceEvidence(
+                status="verified",
+                source="fixture_snapshot",
+                observed_at=observed,
+                detail="Synthesized from validated fixture snapshot data.",
+            ),
+            checked_at=observed,
+        )
+
+    # Use pre-saved fixture brief
+    return IssueLearningBrief(
+        issue_number=brief_data["issue_number"],
+        issue_title=brief_data["issue_title"],
+        issue_url=brief_data["issue_url"],
+        experience_level=level,  # type: ignore
+        explanation=IssueExplanation(**brief_data["explanation"]),
+        requirements=[IssueRequirement(**r) for r in brief_data.get("requirements", [])],
+        relevant_modules=brief_data.get("relevant_modules", []),
+        investigation_targets=[
+            RelevantInvestigationFile(
+                path=t["path"],
+                module_name=t.get("module_name"),
+                why_relevant=t["why_relevant"],
+                what_to_inspect=t["what_to_inspect"],
+                kind=t.get("kind", "candidate"),
+                evidence=IntelligenceEvidence(**t["evidence"]),
+            )
+            for t in brief_data.get("investigation_targets", [])
+        ],
+        related_tests_and_docs=brief_data.get("related_tests_and_docs", []),
+        concepts=[LearningConcept(**c) for c in brief_data.get("concepts", [])],
+        learning_objectives=[LearningObjective(**o) for o in brief_data.get("learning_objectives", [])],
+        readiness_checklist=[ReadinessChecklistItem(**cl) for cl in brief_data.get("readiness_checklist", [])],
+        unresolved_questions=brief_data.get("unresolved_questions", []),
+        ai_status=brief_data.get("ai_status", "complete"),
+        warnings=brief_data.get("warnings", ["Demo/Fixture mode active."]),
+        evidence=IntelligenceEvidence(**brief_data["evidence"]),
+        checked_at=brief_data.get("checked_at", observed),
+    )
+

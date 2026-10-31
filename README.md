@@ -21,11 +21,11 @@ New open-source contributors face an overwhelming discovery barrier. Repositorie
 PatchLoom bridges the gap between wanting to contribute and opening your first PR through an evidence-grounded companion organized around four pillars:
 1. **DISCOVER — Viability Signals & Contributor Fit:** Ingests live repository metadata and computes an objective viability score (0–100) assessing issue staleness, assignment status, linked PR evidence, and reproduction quality. Evaluates pre-filtered candidate issues against the contributor's skills, experience level, and available hours using `models/gemma-4-31b-it`.
 2. **UNDERSTAND — Deterministic Repository Intelligence:** Analyzes repository architecture, programming languages, technologies, package manifests, key application entry points, test profiles, documentation, and logical modules without requiring AI model calls. Deterministically maps issues to components and grounded file targets.
-3. **LEARN & BUILD — Progressive Implementation Guidance:** Guides contributors with grounded candidate files and contextual explanations grounded strictly in existing code paths.
+3. **LEARN & BUILD — Intelligent Issue Learning:** For any chosen issue, generates a personalized Issue Learning Brief explaining problem context, expected outcome, extracted explicit vs inferred requirements, candidate modules and grounded investigation targets, sequenced technical concepts to master, measurable learning objectives, and an interactive 6-dimension understanding readiness checklist.
 4. **VERIFY & CONTRIBUTE — Grounded First-PR Planner:** Generates an actionable, step-by-step contribution plan (3–7 steps) for a chosen issue, complete with setup verification, test commands, a draft PR title, and a maintainer-ready PR description draft.
 
 ### What PatchLoom Does and Does Not Do
-- **What it does:** Recommends a ranked shortlist of plausible issues (up to 12), explains why each matches your skills and time budget, rigorously separates verified facts from AI inferences, and produces a grounded PR plan.
+- **What it does:** Recommends a ranked shortlist of plausible issues (up to 12), explains why each matches your skills and time budget, generates personalized issue learning briefs with grounded file targets, rigorously separates verified facts from AI inferences, and produces a grounded PR plan.
 - **What it does NOT do:** PatchLoom does **not** create accounts or databases, does **not** modify GitHub repositories, does **not** create branches or open automated PRs, does **not** clone repositories or execute arbitrary code, and does **not** hallucinate non-existent files.
 
 ---
@@ -48,9 +48,10 @@ PatchLoom leverages **Gemma 4** (`gemma-4-31b-it`) strictly as an analytical tex
 ```
 
 ### Bounded Model Operations
-PatchLoom uses exactly two bounded model interactions:
+PatchLoom uses bounded model interactions:
 1. **Batched Fit Assessment:** Exactly **1 model call** evaluates candidate issues simultaneously against the contributor profile, avoiding latency creep and token exhaustion.
-2. **First-PR Plan Generation:** Exactly **1 model call** produces a sequenced 3-7 step roadmap for a selected issue.
+2. **Issue Learning Brief:** Exactly **1 model call** produces a personalized educational learning brief for a selected issue (with zero code generation, strict tree grounding, and deterministic fallback on AI quota/outage).
+3. **First-PR Plan Generation:** Exactly **1 model call** produces a sequenced 3-7 step roadmap for a selected issue.
 
 ### Verification, Grounding & Safety Invariants
 - **Strict Repository Path Grounding:** Gemma 4 is provided with the repository file tree (up to 400 paths). Every file path suggested in `likely_files` or contribution steps is checked against the actual repository tree; hallucinated paths are dropped.
