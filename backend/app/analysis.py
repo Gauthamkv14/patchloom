@@ -10,10 +10,11 @@ from app.prompts import (
     BatchedFitResponse,
     build_fit_prompt,
 )
-from app.providers.gemini import GeminiProvider
+from app.providers import get_provider
 from app.providers.base import (
     AuthenticationError,
     InvalidModelOutputError,
+    ModelProvider,
     ModelProviderError,
     ModelTimeoutError,
     QuotaExceededError,
@@ -36,7 +37,7 @@ async def analyze_repository(
     provider_name: Optional[str] = None,
     demo: bool = False,
     github_client: Optional[GitHubClient] = None,
-    model_provider: Optional[GeminiProvider] = None,
+    model_provider: Optional[ModelProvider] = None,
 ) -> AnalyzeResponse:
     """
     Execute full repository analysis:
@@ -48,6 +49,10 @@ async def analyze_repository(
     6. Compute composite final score (0.60 * fit + 0.40 * viability) and rank.
     """
     owner, repo_name = parse_and_validate_github_url(repo_url)
+
+    # Validate requested model provider early before issuing outbound requests
+    if provider_name and not (demo or settings.DEMO_MODE):
+        get_provider(provider_name)
 
     # 0. Offline Fixture/Demo Mode
     if demo or settings.DEMO_MODE:
@@ -75,6 +80,19 @@ async def analyze_repository(
     repo_meta.tree_truncated = gh_trunc or app_trunc
     if repo_meta.tree_truncated:
         warnings.append("Repository file tree was truncated due to scale bounds (retained top 400 paths).")
+
+    # Check CI Presence with evidence provenance
+    if hasattr(gh, "detect_ci") and callable(gh.detect_ci):
+        try:
+            has_ci, ci_evidence = await gh.detect_ci(
+                owner, repo_name, repo_meta.default_branch
+            )
+            repo_meta.has_ci = has_ci
+            if isinstance(ci_evidence.value, dict):
+                repo_meta.ci_status = ci_evidence.value.get("status", "unknown")
+            repo_meta.ci_evidence = ci_evidence
+        except Exception as exc:
+            logger.warning("CI detection encountered an unexpected error: %s", exc)
 
     # 3. Fetch Open Issues & Compute Deterministic Signals
     raw_issues = await gh.fetch_open_issues(owner, repo_name, max_pages=2)
@@ -117,7 +135,7 @@ async def analyze_repository(
         )
 
     # 5. Execute Batched AI Fit Assessment
-    provider = model_provider or GeminiProvider()
+    provider = model_provider or get_provider(provider_name)
     valid_paths_set = set(file_paths)
 
     # Map candidate issue dicts for prompt builder

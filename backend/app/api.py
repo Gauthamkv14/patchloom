@@ -14,6 +14,7 @@ from app.github_client import (
     RepoNotFoundError,
 )
 from app.planner import generate_first_pr_plan
+from app.providers import UnsupportedProviderError
 from app.rate_limit import rate_limit
 from app.schemas import (
     AnalyzeRequest,
@@ -56,7 +57,7 @@ async def analyze_repo_endpoint(request: AnalyzeRequest) -> AnalyzeResponse:
             provider_name=request.provider,
             demo=request.demo or False,
         )
-    except InvalidGitHubURLError as exc:
+    except (InvalidGitHubURLError, UnsupportedProviderError) as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
@@ -104,7 +105,7 @@ async def generate_plan_endpoint(request: PlanRequest) -> PlanResponse:
             provider_name=request.provider,
             demo=request.demo or False,
         )
-    except InvalidGitHubURLError as exc:
+    except (InvalidGitHubURLError, UnsupportedProviderError) as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),

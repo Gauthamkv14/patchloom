@@ -12,15 +12,16 @@ from app.prompts import (
     PlanModelOutput,
     build_plan_prompt,
 )
+from app.providers import get_provider
 from app.providers.base import (
     AuthenticationError,
     InvalidModelOutputError,
+    ModelProvider,
     ModelProviderError,
     ModelTimeoutError,
     QuotaExceededError,
     SafetyBlockedError,
 )
-from app.providers.gemini import GeminiProvider
 from app.schemas import (
     ContributorProfile,
     PlanNote,
@@ -138,7 +139,7 @@ async def generate_first_pr_plan(
     provider_name: Optional[str] = None,
     demo: bool = False,
     github_client: Optional[GitHubClient] = None,
-    model_provider: Optional[GeminiProvider] = None,
+    model_provider: Optional[ModelProvider] = None,
 ) -> PlanResponse:
     """
     Generate a grounded first-PR implementation plan for a verified open issue:
@@ -148,6 +149,10 @@ async def generate_first_pr_plan(
     4. Fall back safely to deterministic plan on quota, network, or validation errors.
     """
     owner, repo_name = parse_and_validate_github_url(repo_url)
+
+    # Validate requested model provider early before issuing outbound requests
+    if provider_name and not (demo or settings.DEMO_MODE):
+        get_provider(provider_name)
 
     # 0. Offline Fixture/Demo Mode
     if demo or settings.DEMO_MODE:
@@ -206,7 +211,7 @@ async def generate_first_pr_plan(
     if is_truncated:
         warnings.append("Planning context exceeded character cap and was safely truncated.")
 
-    provider = model_provider or GeminiProvider()
+    provider = model_provider or get_provider(provider_name)
     plan_output: Optional[PlanModelOutput] = None
 
     # Single attempt with at most one retry strictly on InvalidModelOutputError

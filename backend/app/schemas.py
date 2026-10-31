@@ -89,7 +89,9 @@ class RepoMetadata(BaseModel):
     )
     has_readme: bool = False
     has_contributing: bool = False
-    has_ci: bool = False
+    has_ci: Optional[bool] = None
+    ci_status: Literal["detected", "none_detected", "unknown"] = "unknown"
+    ci_evidence: Optional[SignalEvidence] = None
     tree_truncated: bool = False
 
 

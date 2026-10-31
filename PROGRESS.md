@@ -1,10 +1,10 @@
 # PROGRESS.md — PatchLoom Execution Log & Milestone Tracker
 
 ## Current Status
-- **Current Milestone:** Deployment Readiness (Security Audit + Dockerization) — Complete & Verified
-- **Authorized Gate:** Deployment Readiness: Security Audit + Dockerization
-- **Milestone Scope Complete:** P0 Core (M0–M7) + P1 Hardening (M8) + Deployment Readiness (Security Audit + Dockerization) Fully Verified
-- **Blocked on:** Ready for review / Next authorized phase
+- **Current Milestone:** M0.1 Architectural Cleanup — Complete & Verified
+- **Authorized Gate:** M0.1 Architectural Cleanup (Provider Routing, has_ci, Dependencies, Scratch Cleanup)
+- **Milestone Scope Complete:** P0 Core (M0–M7) + P1 Hardening (M8) + Deployment Readiness + M0 Audit + M0.1 Cleanup
+- **Blocked on:** M1 2.0 Gate Approval (Repository Intelligence layer)
 
 ---
 
@@ -23,6 +23,9 @@
 | **M7** | Fixtures, Docs & Demo Rehearsal | P0 | Complete | 3 demo fixtures (Scenarios A/B/C), README, architecture.md, pitch-notes.md, 64 tests passing |
 | **M8** | Hardening & App Rate Limiting | P1 | Complete | In-memory limiter, security headers, log redactor, injection tests, security checklist, 74 tests passing |
 | **Deployment Readiness** | Security Audit & Dockerization | P1+ | Complete | Upstream caps, delimiter smuggling sanitizer, chunked encoding rejection, CIDR proxy trust, multi-stage unprivileged Docker containers, 79 tests passing |
+| **M0 2.0** | PatchLoom 2.0 Baseline Audit | 2.0 | Complete | 86 tests passing verified; full codebase audit; AGENTS.md updated; M1 design documented |
+| **M0.1** | Architectural Cleanup | 2.0 | Complete | Provider factory, has_ci bounded check & provenance, scratch cleanup, google-genai pinned, 95 tests passing |
+| **M1 2.0** | Repository Intelligence Layer | 2.0 | Not Started | Awaiting gate approval |
 | **M9** | Ollama Provider & Evaluation | P2 | Not Started | Stretch (P2) |
 | **M10** | Render Deployment | P3 | Not Started | Contingent / Optional (P3) |
 
@@ -116,8 +119,13 @@
   - Added automatic prompt-mode fallback to `GeminiProvider._call_model` on schema errors (`ValueError: additionalProperties`) and server-side 500 crashes.
   - Ensured `_fallback_prompt_mode` omits `response_mime_type="application/json"` to bypass the unstable Gemini API Gemma proxy.
   - Enhanced `_parse_and_validate` with regex block extraction to reliably extract JSON from markdown fences or surrounding model commentary.
-
-
+- **PatchLoom 2.0 M0.1 Architectural Cleanup (2026-10-31):**
+  - **Provider Routing Completed:** Implemented `get_provider(provider_name)` in `app/providers/__init__.py`. Routes cleanly to `GeminiProvider` by default or settings, validates early in `analysis.py` and `planner.py`, and maps `UnsupportedProviderError` to HTTP 400 Bad Request in `api.py`. Analysis and planning orchestration type-hint against abstract `ModelProvider`.
+  - **CI Metadata (`has_ci`) Implemented with Provenance:** Implemented `detect_ci` and `evaluate_ci_presence_from_paths` in `app/github_client.py` detecting common CI configurations (GitHub Actions, Travis, CircleCI, GitLab CI, Azure Pipelines, AppVeyor, Jenkins, Buildkite, Bitbucket Pipelines). Respects 5MB payload limits, caches tree results, and strictly marks truncated/uninspected trees as `has_ci=None` and `status="unknown"`, never reporting absent.
+  - **Scratch Files Cleaned:** Removed temporary experiment `scratch/test_model_capability.py`. Preserved reusable tests `scratch/rehearse_demo.py` and `scratch/smoke_test_gemini.py`. Confirmed `.gitignore` excludes `scratch/`.
+  - **Dependency Range Pinned:** Pinned `google-genai>=2.31.0,<3.0.0` in `backend/requirements.txt` based on the actively verified installed version (2.31.0).
+  - **Test Suite Verification:** 95 passed in 6.28s (`pytest backend/tests/ -v`). Added 3 provider routing tests and 5 focused CI detection tests (`test_detect_ci_detected`, `test_detect_ci_not_detected_complete_tree`, `test_detect_ci_unknown_when_tree_truncated`, `test_detect_ci_unknown_when_api_fails`, `test_detect_ci_unknown_when_payload_exceeds_cap`), plus 1 API 400 unsupported provider test.
+  - **Frontend Build Verified:** `tsc && vite build` compiled and packaged cleanly in 620ms (zero TypeScript errors).
 
 
 

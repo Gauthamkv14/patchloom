@@ -8,7 +8,7 @@ from app.analysis import analyze_repository
 from app.main import app
 from app.prompts import BatchedFitResponse, IssueFitAssessment, build_fit_prompt
 from app.providers.base import QuotaExceededError, InvalidModelOutputError
-from app.schemas import ContributorProfile, RepoMetadata
+from app.schemas import ContributorProfile, RepoMetadata, SignalEvidence
 
 
 @pytest.fixture
@@ -46,6 +46,16 @@ def mock_github():
             ["src/main.py", "src/utils.py", "docs/index.md", "tests/test_main.py"],
             False,
             False,
+        )
+    )
+    gh.detect_ci = AsyncMock(
+        return_value=(
+            True,
+            SignalEvidence(
+                status="verified",
+                source="github_git_tree",
+                value={"status": "detected", "files": [".github/workflows/ci.yml"]},
+            ),
         )
     )
     gh.fetch_open_issues = AsyncMock(
@@ -180,6 +190,26 @@ async def test_analyze_api_endpoint_invalid_url():
         )
     assert resp.status_code == 400
     assert "Only HTTPS" in resp.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_analyze_api_endpoint_unsupported_provider():
+    """Verify POST /api/analyze rejects unsupported model provider with 400 Bad Request."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        resp = await client.post(
+            "/api/analyze",
+            json={
+                "repo_url": "https://github.com/testorg/testrepo",
+                "profile": {
+                    "skills": ["python"],
+                    "experience_level": "beginner",
+                    "available_hours": 5,
+                },
+                "provider": "unsupported_ai_provider",
+            },
+        )
+    assert resp.status_code == 400
+    assert "Provider 'unsupported_ai_provider' is not supported" in resp.json()["detail"]
 
 
 @pytest.mark.asyncio

@@ -185,3 +185,115 @@ async def test_fetch_file_tree_filters_and_bounds():
     assert not any("node_modules" in p for p in paths)
     assert not any(p.endswith(".png") for p in paths)
     assert not any("package-lock.json" in p for p in paths)
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_detect_ci_detected():
+    """Verify common CI files (GitHub Actions, Travis, etc.) are detected and verified."""
+    respx.get("https://api.github.com/repos/org/repo/git/trees/main?recursive=1").respond(
+        status_code=200,
+        json={
+            "tree": [
+                {"path": "src/index.ts", "type": "blob"},
+                {"path": ".github/workflows/ci.yml", "type": "blob"},
+                {"path": "package.json", "type": "blob"},
+            ],
+            "truncated": False,
+        },
+    )
+
+    client = GitHubClient()
+    has_ci, evidence = await client.detect_ci("org", "repo", "main")
+
+    assert has_ci is True
+    assert evidence.status == "verified"
+    assert evidence.value["status"] == "detected"
+    assert ".github/workflows/ci.yml" in evidence.value["files"]
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_detect_ci_not_detected_complete_tree():
+    """Verify clean complete tree without CI configuration reports none_detected (has_ci=False)."""
+    respx.get("https://api.github.com/repos/org/repo/git/trees/main?recursive=1").respond(
+        status_code=200,
+        json={
+            "tree": [
+                {"path": "src/main.py", "type": "blob"},
+                {"path": "README.md", "type": "blob"},
+                {"path": "tests/test_main.py", "type": "blob"},
+            ],
+            "truncated": False,
+        },
+    )
+
+    client = GitHubClient()
+    has_ci, evidence = await client.detect_ci("org", "repo", "main")
+
+    assert has_ci is False
+    assert evidence.status == "verified"
+    assert evidence.value["status"] == "none_detected"
+    assert evidence.value["files"] == []
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_detect_ci_unknown_when_tree_truncated():
+    """Verify truncated tree without CI configuration reports unknown (has_ci=None), not absent."""
+    respx.get("https://api.github.com/repos/org/repo/git/trees/main?recursive=1").respond(
+        status_code=200,
+        json={
+            "tree": [
+                {"path": "src/main.py", "type": "blob"},
+                {"path": "README.md", "type": "blob"},
+            ],
+            "truncated": True,
+        },
+    )
+
+    client = GitHubClient()
+    has_ci, evidence = await client.detect_ci("org", "repo", "main")
+
+    assert has_ci is None
+    assert evidence.status == "unknown"
+    assert evidence.value["status"] == "unknown"
+    assert "truncated" in evidence.value["detail"].lower()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_detect_ci_unknown_when_api_fails():
+    """Verify API error (e.g. 500) reports unknown with provenance, never verified absent."""
+    respx.get("https://api.github.com/repos/org/repo/git/trees/main?recursive=1").respond(
+        status_code=500
+    )
+
+    client = GitHubClient()
+    has_ci, evidence = await client.detect_ci("org", "repo", "main")
+
+    assert has_ci is None
+    assert evidence.status == "unknown"
+    assert evidence.value["status"] == "unknown"
+    assert "500" in evidence.value["detail"]
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_detect_ci_unknown_when_payload_exceeds_cap():
+    """Verify tree payload exceeding 5MB cap is rejected and labeled unknown."""
+    from app.github_client import MAX_TREE_PAYLOAD_BYTES
+
+    respx.get("https://api.github.com/repos/org/repo/git/trees/main?recursive=1").respond(
+        status_code=200,
+        content=b"x" * (MAX_TREE_PAYLOAD_BYTES + 1024),
+    )
+
+    client = GitHubClient()
+    has_ci, evidence = await client.detect_ci("org", "repo", "main")
+
+    assert has_ci is None
+    assert evidence.status == "unknown"
+    assert evidence.value["status"] == "unknown"
+    assert "5mb safety limit" in evidence.value["detail"].lower()
+

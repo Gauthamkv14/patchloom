@@ -189,3 +189,27 @@ def test_batched_fit_schema_has_no_min_max_constraints():
     )
     assert valid_neg.fit_score == 0
 
+
+def test_get_provider_default_returns_gemini():
+    """Verify get_provider() defaults to GeminiProvider."""
+    from app.providers import get_provider
+    provider = get_provider()
+    assert isinstance(provider, GeminiProvider)
+
+
+def test_get_provider_explicit_case_insensitive():
+    """Verify get_provider correctly resolves whitespace and case."""
+    from app.providers import get_provider
+    provider = get_provider("  GeMiNi  ")
+    assert isinstance(provider, GeminiProvider)
+
+
+def test_get_provider_unsupported_raises_error():
+    """Verify get_provider with unsupported name raises UnsupportedProviderError."""
+    from app.providers import UnsupportedProviderError, get_provider
+    with pytest.raises(UnsupportedProviderError) as exc_info:
+        get_provider("nonexistent_ai")
+    assert "Provider 'nonexistent_ai' is not supported" in str(exc_info.value)
+    assert "'gemini'" in str(exc_info.value)
+
+

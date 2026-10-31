@@ -61,6 +61,9 @@ def load_fixture_analysis(
     data = get_fixture_data_for_url(repo_url)
     repo_data = data["repo"]
 
+    has_ci_val = repo_data.get("has_ci", True)
+    ci_status_val = "detected" if has_ci_val is True else ("none_detected" if has_ci_val is False else "unknown")
+
     repo_meta = RepoMetadata(
         owner=repo_data["owner"],
         name=repo_data["name"],
@@ -70,7 +73,13 @@ def load_fixture_analysis(
         open_issues_count=repo_data.get("open_issues_count", 0),
         has_readme=repo_data.get("has_readme", True),
         has_contributing=repo_data.get("has_contributing", False),
-        has_ci=repo_data.get("has_ci", True),
+        has_ci=has_ci_val,
+        ci_status=repo_data.get("ci_status", ci_status_val),
+        ci_evidence=SignalEvidence(
+            status="verified" if has_ci_val is not None else "unknown",
+            source="fixture_snapshot",
+            value={"status": ci_status_val, "files": [".github/workflows/ci.yml"] if has_ci_val else []},
+        ),
         tree_truncated=repo_data.get("tree_truncated", False),
     )
 

@@ -10,7 +10,7 @@ import httpx
 
 from app.cache import app_cache
 from app.config import settings
-from app.schemas import RepoMetadata
+from app.schemas import RepoMetadata, SignalEvidence
 
 GITHUB_API_BASE = "https://api.github.com"
 MAX_PATH_COUNT = 400
@@ -59,6 +59,65 @@ IGNORED_EXTENSIONS = (
 
 # Structural identifier pattern for owner and repo
 ID_PATTERN = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
+
+# CI configuration patterns for common CI/CD systems
+COMMON_CI_PATTERNS = (
+    r"^\.github/workflows/.*\.ya?ml$",
+    r"^\.travis\.ya?ml$",
+    r"^\.circleci/.*\.ya?ml$",
+    r"^\.gitlab-ci\.ya?ml$",
+    r"^(?:azure-pipelines|azure-pipeline)\.ya?ml$",
+    r"^\.?appveyor\.ya?ml$",
+    r"^jenkinsfile.*$",
+    r"^(?:\.buildkite/.*|buildkite\.ya?ml)$",
+    r"^bitbucket-pipelines\.ya?ml$",
+)
+CI_REGEX = re.compile("|".join(COMMON_CI_PATTERNS), re.IGNORECASE)
+
+
+def evaluate_ci_presence_from_paths(
+    paths: list[str],
+    is_truncated: bool = False,
+    observed_at: Optional[str] = None,
+) -> tuple[Optional[bool], SignalEvidence]:
+    """
+    Evaluate CI configuration presence from a list of repository paths with provenance tracking.
+
+    Returns:
+      (has_ci: Optional[bool], evidence: SignalEvidence)
+      - Detected: (True, SignalEvidence(status="verified", value={"status": "detected", "files": matched}))
+      - None detected (complete tree): (False, SignalEvidence(status="verified", value={"status": "none_detected", "files": []}))
+      - Unknown (truncated tree): (None, SignalEvidence(status="unknown", value={"status": "unknown", "detail": "Repository tree was truncated; CI configuration cannot be ruled out.", "files": []}))
+    """
+    observed = observed_at or datetime.now(timezone.utc).isoformat()
+    matched = [p for p in paths if CI_REGEX.match(p)]
+
+    if matched:
+        return True, SignalEvidence(
+            status="verified",
+            source="github_git_tree",
+            observed_at=observed,
+            value={"status": "detected", "files": matched[:10]},
+        )
+
+    if is_truncated:
+        return None, SignalEvidence(
+            status="unknown",
+            source="github_git_tree",
+            observed_at=observed,
+            value={
+                "status": "unknown",
+                "detail": "Repository tree was truncated; CI configuration cannot be ruled out.",
+                "files": [],
+            },
+        )
+
+    return False, SignalEvidence(
+        status="verified",
+        source="github_git_tree",
+        observed_at=observed,
+        value={"status": "none_detected", "files": []},
+    )
 
 
 class InvalidGitHubURLError(ValueError):
@@ -410,11 +469,25 @@ class GitHubClient:
 
             # Defense-in-depth: Reject upstream response if exceeds maximum payload safety limit
             if len(resp.content) > MAX_TREE_PAYLOAD_BYTES:
+                ci_cache_key = f"ci:{owner.lower()}/{repo.lower()}:{default_branch}"
+                unknown_evidence = SignalEvidence(
+                    status="unknown",
+                    source="github_git_tree",
+                    value={"status": "unknown", "detail": "Repository tree exceeded 5MB safety limit; CI inspection skipped", "files": []},
+                )
+                app_cache.set(ci_cache_key, (None, unknown_evidence), ttl_seconds=600.0)
                 return [], True, True
 
             data = resp.json()
             github_truncated = bool(data.get("truncated", False))
             tree_items = data.get("tree", [])
+
+            # Evaluate and cache CI presence from full raw tree before path filtering
+            all_raw_paths = [item.get("path", "") for item in tree_items if item.get("path")]
+            ci_cache_key = f"ci:{owner.lower()}/{repo.lower()}:{default_branch}"
+            if not app_cache.get(ci_cache_key):
+                ci_result = evaluate_ci_presence_from_paths(all_raw_paths, is_truncated=github_truncated)
+                app_cache.set(ci_cache_key, ci_result, ttl_seconds=600.0)
 
         valid_paths: list[str] = []
         for item in tree_items:
@@ -441,6 +514,63 @@ class GitHubClient:
         result = (retained_paths, github_truncated, app_truncated)
         app_cache.set(cache_key, result, ttl_seconds=600.0)
         return result
+
+    async def detect_ci(
+        self, owner: str, repo: str, default_branch: str = "main"
+    ) -> tuple[Optional[bool], SignalEvidence]:
+        """
+        Detect presence of common CI configurations with evidence provenance.
+        Checks cached CI result if available, otherwise queries GitHub Git Trees API.
+        Respects response payload limits (5MB) and marks truncated/failed inspections as 'unknown'.
+        """
+        cache_key = f"ci:{owner.lower()}/{repo.lower()}:{default_branch}"
+        cached = app_cache.get(cache_key)
+        if cached:
+            return cached
+
+        observed = datetime.now(timezone.utc).isoformat()
+
+        async with self._create_http_client() as client:
+            try:
+                resp = await client.get(f"/repos/{owner}/{repo}/git/trees/{default_branch}?recursive=1")
+            except Exception as exc:
+                evidence = SignalEvidence(
+                    status="unknown",
+                    source="github_git_tree",
+                    observed_at=observed,
+                    value={"status": "unknown", "detail": f"Failed to fetch repository tree: {exc}", "files": []},
+                )
+                return None, evidence
+
+            if resp.status_code != 200:
+                evidence = SignalEvidence(
+                    status="unknown",
+                    source="github_git_tree",
+                    observed_at=observed,
+                    value={"status": "unknown", "detail": f"GitHub returned HTTP {resp.status_code} when querying tree", "files": []},
+                )
+                return None, evidence
+
+            if len(resp.content) > MAX_TREE_PAYLOAD_BYTES:
+                evidence = SignalEvidence(
+                    status="unknown",
+                    source="github_git_tree",
+                    observed_at=observed,
+                    value={"status": "unknown", "detail": "Repository tree exceeded 5MB safety limit; CI inspection skipped", "files": []},
+                )
+                return None, evidence
+
+            data = resp.json()
+            github_truncated = bool(data.get("truncated", False))
+            tree_items = data.get("tree", [])
+            all_raw_paths = [item.get("path", "") for item in tree_items if item.get("path")]
+
+            has_ci, evidence = evaluate_ci_presence_from_paths(
+                all_raw_paths, is_truncated=github_truncated, observed_at=observed
+            )
+            result = (has_ci, evidence)
+            app_cache.set(cache_key, result, ttl_seconds=600.0)
+            return result
 
     async def fetch_issue_comments(
         self, owner: str, repo: str, issue_number: int, max_comments: int = 3

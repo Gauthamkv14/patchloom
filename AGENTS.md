@@ -6,13 +6,35 @@ This document defines the non-negotiable rules, architecture boundaries, securit
 
 ## 1. Project Overview & Priority Order
 
-PatchLoom takes a canonical public GitHub repository URL and contributor profile (skills, languages, experience level, available hours), deterministically collects repository and issue viability signals, uses Gemma 4 to assess contributor fit and draft a bounded first-PR plan, validates all model output, and presents a ranked shortlist.
+**PatchLoom 2.0** is an AI-assisted open-source learning companion that helps developers discover, understand, learn from, and eventually contribute to real open-source repositories.
+
+**Mission:** Help developers become better contributors through real-world open-source experiences.
 
 **Tagline:** From 'I want to contribute' to a repo-grounded plan for a first PR.
 
+### Product Pillars (PatchLoom 2.0)
+
+1. **DISCOVER** — Find issues matching contributor skills, experience, and learning goals.
+2. **UNDERSTAND** — Explain repository architecture, issue context, relevant files, and unfamiliar concepts.
+3. **LEARN & BUILD** — Guide contributors through implementation using progressive hints and explanations.
+4. **VERIFY & CONTRIBUTE** — Help validate changes, understand test results, review diffs, and prepare pull requests.
+
+Future capability:
+5. **PRACTICE** — Learn from previously resolved issues and historical pull requests.
+
+### Product Principles
+
+- Learning over blind code generation.
+- Evidence over hallucination.
+- Human control over autonomous execution.
+- Transparent AI reasoning.
+- Reproducible and testable workflows.
+- Useful experiences for beginners without limiting experienced contributors.
+- Security and privacy by design.
+
 ### Priority Order (Strict)
-- **P0 Core (Must work end-to-end locally):** M0 to M7.
-- **P1 Hardening (Contingent):** M8.
+- **P0 Core (Must work end-to-end locally):** M0 to M7 (complete), plus 2.0 pillars.
+- **P1 Hardening (Complete):** M8 (complete).
 - **P2 Stretch (Contingent):** M9 (Ollama provider & evaluation).
 - **P3 Deployment (Last, optional):** M10 (Render single-service deployment).
 

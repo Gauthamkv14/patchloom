@@ -31,7 +31,9 @@ export interface RepoMetadata {
   checked_at: string;
   has_readme: boolean;
   has_contributing: boolean;
-  has_ci: boolean;
+  has_ci?: boolean | null;
+  ci_status?: 'detected' | 'none_detected' | 'unknown';
+  ci_evidence?: SignalEvidence;
   tree_truncated: boolean;
 }
 

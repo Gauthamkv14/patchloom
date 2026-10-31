@@ -129,7 +129,7 @@ Model providers implement the abstract interface in [`backend/app/providers/base
 2. **Handle Errors Safely:**
    Map provider exceptions to PatchLoom's standard errors (`QuotaExceededError`, `AuthenticationError`, `ModelTimeoutError`, `InvalidModelOutputError`).
 3. **Register Provider:**
-   Instantiate the provider in `analysis.py` and `planner.py` when `provider_name="ollama"`.
+   Add the provider class to `_PROVIDER_REGISTRY` in [`backend/app/providers/__init__.py`](file:///c:/Users/User/OneDrive/Desktop/Projects/PatchLoom/backend/app/providers/__init__.py). Callers in `analysis.py` and `planner.py` automatically route to it via `get_provider(provider_name)` without requiring any changes to business logic.
 
 ---
 
