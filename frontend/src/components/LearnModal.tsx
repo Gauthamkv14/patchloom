@@ -1,15 +1,22 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { IssueLearningBrief, ReadinessChecklistItem } from '../types';
 
 interface LearnModalProps {
   brief: IssueLearningBrief;
   onClose: () => void;
+  onStartGuidedImplementation?: (issueNumber: number) => void;
 }
 
-export const LearnModal: React.FC<LearnModalProps> = ({ brief, onClose }) => {
+export const LearnModal: React.FC<LearnModalProps> = ({ brief, onClose, onStartGuidedImplementation }) => {
   const [activeTab, setActiveTab] = useState<'explanation' | 'codebase' | 'concepts' | 'checklist'>('explanation');
   const [checkedItems, setCheckedItems] = useState<Record<string, boolean>>({});
   const [copiedText, setCopiedText] = useState(false);
+
+  // Reset checklist and active tab when switching issues
+  useEffect(() => {
+    setCheckedItems({});
+    setActiveTab('explanation');
+  }, [brief.issue_number]);
 
   const toggleCheck = (id: string) => {
     setCheckedItems((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -384,6 +391,19 @@ ${brief.readiness_checklist.map((item, idx) => `[${checkedItems[`chk-${idx}`] ? 
           <button type="button" className="btn-secondary" onClick={copyBriefSummary}>
             {copiedText ? '✓ Copied Summary' : '📋 Copy Brief Summary'}
           </button>
+          {onStartGuidedImplementation && (
+            <button
+              type="button"
+              className="btn-primary"
+              style={{ backgroundColor: '#2563eb' }}
+              onClick={() => {
+                onClose();
+                onStartGuidedImplementation(brief.issue_number);
+              }}
+            >
+              🚀 Start Guided Implementation
+            </button>
+          )}
           <button type="button" className="btn-primary" onClick={onClose}>
             Done
           </button>

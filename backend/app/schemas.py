@@ -498,5 +498,120 @@ class LearnRequest(BaseModel):
     demo: Optional[bool] = Field(default=False, description="Request fixture demo mode")
 
 
+# =====================================================================
+# M3: Guided Implementation Schemas (LEARN & BUILD Pillar)
+# =====================================================================
+
+
+class StepCheckpoint(BaseModel):
+    """Self-reflection question and verification guidance for an implementation step."""
+
+    question: str = Field(..., description="Self-check reflection question")
+    verification_guidance: str = Field(..., description="Actionable advice on how to confirm this step")
+
+
+class ProgressiveHint(BaseModel):
+    """Progressive hint revealing technical guidance step-by-step upon user request."""
+
+    level: int = Field(..., ge=1, le=3, description="1: gentle direction, 2: specific investigation, 3: technical guidance")
+    title: str = Field(..., description="Short hint title (e.g. 'Where to look', 'Inspecting parameters')")
+    content: str = Field(..., description="Educational guidance text that gradually reduces ambiguity")
+    kind: Literal["evidence_based", "conceptual_guidance"] = Field(
+        default="evidence_based",
+        description="Whether derived directly from verified repository evidence or conceptual pattern",
+    )
+
+
+class CodeExplorationTarget(BaseModel):
+    """Relevant repository file with targeted exploration and navigation advice."""
+
+    path: str = Field(..., description="File path strictly verified in repository tree")
+    module_name: Optional[str] = Field(default=None, description="Component or module name")
+    why_relevant: str = Field(..., description="Why this file matters to the issue")
+    target_symbols: list[str] = Field(default_factory=list, description="Specific functions, classes, or sections to inspect")
+    behavior_to_observe: str = Field(..., description="What runtime behavior, data flow, or error checks to observe")
+    suggested_search_terms: list[str] = Field(default_factory=list, description="Helpful identifiers or terms to search for in this file")
+    evidence: IntelligenceEvidence
+
+
+class PatchSuggestion(BaseModel):
+    """Optional, educational code or patch snippet requested explicitly by contributor."""
+
+    target_path: str = Field(..., description="Target file path in repository tree")
+    target_symbol: Optional[str] = Field(default=None, description="Relevant function, method, or class name")
+    summary: str = Field(..., description="Plain-language explanation of the proposed change")
+    code_snippet: str = Field(..., description="Educational code snippet or diff illustrating the approach")
+    assumptions: list[str] = Field(default_factory=list, description="Assumptions made about the surrounding code")
+    expected_effect: str = Field(..., description="Expected behavior once this change is introduced")
+    potential_risks: list[str] = Field(default_factory=list, description="Edge cases, regression risks, or compatibility caveats")
+    verification_status: Literal["unverified_educational_draft"] = Field(
+        default="unverified_educational_draft",
+        description="Explicit notice that this suggestion has not been automatically tested or applied",
+    )
+
+
+class ImplementationApproach(BaseModel):
+    """A viable implementation approach with design trade-offs and edge cases."""
+
+    approach_id: str = Field(..., description="Unique slug for this approach (e.g. 'approach-adapter-timeout')")
+    title: str = Field(..., description="Short title of the approach")
+    summary: str = Field(..., description="Overview of how this approach addresses the issue")
+    relevant_design_patterns: list[str] = Field(default_factory=list, description="Design patterns or repository idioms used")
+    pros: list[str] = Field(default_factory=list, description="Advantages of this approach")
+    cons_and_tradeoffs: list[str] = Field(default_factory=list, description="Trade-offs, complexity, or limitations")
+    edge_cases: list[str] = Field(default_factory=list, description="Potential edge cases to guard against")
+    regression_risks: list[str] = Field(default_factory=list, description="Potential risks to existing functionality")
+    unanswered_questions: list[str] = Field(default_factory=list, description="Questions for maintainers or remaining uncertainties")
+
+
+class ImplementationStep(BaseModel):
+    """A practical, ordered step in the guided implementation roadmap."""
+
+    id: str = Field(..., description="Unique step identifier (e.g. 'step-1')")
+    order: int = Field(..., ge=1, description="Sequential order in the roadmap")
+    title: str = Field(..., description="Step title")
+    objective: str = Field(..., description="What the contributor will achieve or understand in this step")
+    why_it_matters: str = Field(..., description="Why this step is necessary")
+    files: list[str] = Field(default_factory=list, description="Repository files relevant to this step (strictly grounded in tree)")
+    what_to_inspect: str = Field(..., description="Specific elements, signatures, or tests to inspect")
+    expected_outcome: str = Field(..., description="Expected state or understanding upon completion")
+    dependencies: list[str] = Field(default_factory=list, description="IDs of steps that should be completed before this step")
+    completion_criteria: str = Field(..., description="Concrete criteria the contributor uses to self-verify completion")
+    hints: list[ProgressiveHint] = Field(default_factory=list, description="Up to 3 progressive hints for this step")
+    checkpoint: StepCheckpoint
+    patch_suggestion: Optional[PatchSuggestion] = Field(default=None, description="Optional educational code suggestion")
+
+
+class GuidedImplementationPlan(BaseModel):
+    """Complete structured Guided Implementation workspace for an issue (M3 - LEARN & BUILD Pillar)."""
+
+    issue_number: int
+    issue_title: str
+    issue_url: str
+    experience_level: Literal["beginner", "intermediate", "advanced"]
+    overview: str = Field(..., description="High-level implementation strategy adapted to contributor level")
+    steps: list[ImplementationStep] = Field(default_factory=list)
+    exploration_targets: list[CodeExplorationTarget] = Field(default_factory=list)
+    approaches: list[ImplementationApproach] = Field(default_factory=list)
+    recommended_approach_id: str = Field(..., description="ID of the recommended starting approach")
+    ai_status: Literal["complete", "unavailable_or_invalid"]
+    warnings: list[str] = Field(default_factory=list)
+    evidence: IntelligenceEvidence
+    checked_at: str = Field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
+
+
+class GuidedImplementationRequest(BaseModel):
+    """Request schema for POST /api/guided-implementation."""
+
+    repo_url: str = Field(..., description="Canonical GitHub repo URL (https://github.com/OWNER/REPO)")
+    issue_number: int = Field(..., description="GitHub issue number to generate guided implementation for")
+    profile: ContributorProfile
+    provider: Optional[str] = Field(default=None, description="Optional explicit model provider")
+    demo: Optional[bool] = Field(default=False, description="Request fixture demo mode")
+    learning_brief: Optional[IssueLearningBrief] = Field(default=None, description="Optional pre-existing IssueLearningBrief to reuse")
+
+
 # Resolve forward references
 CandidateIssue.model_rebuild()

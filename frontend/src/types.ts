@@ -300,3 +300,85 @@ export interface IssueLearningBrief {
   evidence: IntelligenceEvidence;
   checked_at: string;
 }
+
+// =====================================================================
+// M3: Guided Implementation Types (LEARN & BUILD Pillar)
+// =====================================================================
+
+export interface StepCheckpoint {
+  question: string;
+  verification_guidance: string;
+}
+
+export interface ProgressiveHint {
+  level: number;
+  title: string;
+  content: string;
+  kind: 'evidence_based' | 'conceptual_guidance';
+}
+
+export interface CodeExplorationTarget {
+  path: string;
+  module_name?: string | null;
+  why_relevant: string;
+  target_symbols: string[];
+  behavior_to_observe: string;
+  suggested_search_terms: string[];
+  evidence: IntelligenceEvidence;
+}
+
+export interface PatchSuggestion {
+  target_path: string;
+  target_symbol?: string | null;
+  summary: string;
+  code_snippet: string;
+  assumptions: string[];
+  expected_effect: string;
+  potential_risks: string[];
+  verification_status: 'unverified_educational_draft';
+}
+
+export interface ImplementationApproach {
+  approach_id: string;
+  title: string;
+  summary: string;
+  relevant_design_patterns: string[];
+  pros: string[];
+  cons_and_tradeoffs: string[];
+  edge_cases: string[];
+  regression_risks: string[];
+  unanswered_questions: string[];
+}
+
+export interface ImplementationStep {
+  id: string;
+  order: number;
+  title: string;
+  objective: string;
+  why_it_matters: string;
+  files: string[];
+  what_to_inspect: string;
+  expected_outcome: string;
+  dependencies: string[];
+  completion_criteria: string;
+  hints: ProgressiveHint[];
+  checkpoint: StepCheckpoint;
+  patch_suggestion?: PatchSuggestion | null;
+}
+
+export interface GuidedImplementationPlan {
+  issue_number: number;
+  issue_title: string;
+  issue_url: string;
+  experience_level: 'beginner' | 'intermediate' | 'advanced';
+  overview: string;
+  steps: ImplementationStep[];
+  exploration_targets: CodeExplorationTarget[];
+  approaches: ImplementationApproach[];
+  recommended_approach_id: string;
+  ai_status: 'complete' | 'unavailable_or_invalid';
+  warnings: string[];
+  evidence: IntelligenceEvidence;
+  checked_at: string;
+}
+

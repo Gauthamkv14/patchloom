@@ -1,10 +1,10 @@
 # PROGRESS.md — PatchLoom Execution Log & Milestone Tracker
 
 ## Current Status
-- **Current Milestone:** M2 2.0 Intelligent Issue Learning — Complete & Verified
-- **Authorized Gate:** M2 2.0 Intelligent Issue Learning (LEARN Pillar)
-- **Milestone Scope Complete:** P0 Core (M0–M7) + P1 Hardening (M8) + Deployment Readiness + M0 Audit + M0.1 Cleanup + M1 2.0 Intelligence Layer + M2 2.0 Issue Learning
-- **Blocked on:** M3 2.0 Gate Approval (Progressive Implementation Guidance)
+- **Current Milestone:** M3 2.0 Guided Implementation — Complete & Verified
+- **Authorized Gate:** M3 2.0 Guided Implementation (LEARN & BUILD Pillar)
+- **Milestone Scope Complete:** P0 Core (M0–M7) + P1 Hardening (M8) + Deployment Readiness + M0 Audit + M0.1 Cleanup + M1 2.0 Intelligence Layer + M2 2.0 Issue Learning + M3 2.0 Guided Implementation
+- **Blocked on:** Gate Approval for Next Milestone / Review
 
 ---
 
@@ -27,6 +27,7 @@
 | **M0.1** | Architectural Cleanup | 2.0 | Complete | Provider factory, has_ci bounded check & provenance, scratch cleanup, google-genai pinned, 95 tests passing |
 | **M1 2.0** | Repository Intelligence Layer | 2.0 | Complete | Deterministic intelligence engine, overview, entrypoints, test & CI, docs, modules, issue-mapping, 110 tests passing |
 | **M2 2.0** | Intelligent Issue Learning | 2.0 | Complete | Personalized Issue Learning Briefs, requirements extraction, grounded investigation targets, technical concepts & sequencing, measurable objectives, interactive readiness checklist, 122 tests passing |
+| **M3 2.0** | Guided Implementation Workspace | 2.0 | Complete | Implementation roadmaps, 3-tier progressive hint system, code exploration guidance, alternative approaches with trade-offs, step checkpoints, optional educational patch suggestions, 130 tests passing |
 | **M9** | Ollama Provider & Evaluation | P2 | Not Started | Stretch (P2) |
 | **M10** | Render Deployment | P3 | Not Started | Contingent / Optional (P3) |
 
@@ -46,6 +47,7 @@
 10. **Network Ingress & Targeted Proxy Isolation:** The backend container's port 8000 is internal only (`expose: ["8000"]`) and never published to the host interfaces. The frontend container on port 3000 serves as the single public gateway. To prevent proxy spoofing, Nginx overwrites incoming forwarded headers with the TCP remote address (`$remote_addr`), and backend `TRUSTED_PROXIES` is strictly restricted to the static IP of the frontend proxy container (`172.28.0.10`) on dedicated subnet `172.28.0.0/24`. All base container images are pinned by deliberate versions and immutable multi-architecture manifest digests.
 11. **Deterministic Repository Intelligence Engine (Pillar 2 - UNDERSTAND):** The M1 engine is 100% deterministic, operating without requiring AI model inference, credentials, cloning, shell execution, or external network dependencies beyond standard public GitHub tree/metadata fetching. Testing infrastructure is strictly modeled as `detected`, `not_detected` (only when the tree is complete), or `unknown` (when truncated or incomplete). Every insight tracks evidence provenance (`status`, `source`, `observed_at`). Issue-to-module mapping strictly retains grounded files present in the ingested tree. Plain text rendering in React JSX with zero `dangerouslySetInnerHTML`.
 12. **Intelligent Issue Learning Engine (Pillar 3 - LEARN):** M2 introduces personalized Issue Learning Briefs that prioritize educational understanding and contributor independence over code generation. File targets in `investigation_targets` must strictly exist in the ingested repository tree; ungrounded paths are dropped. When AI inference fails, times out, or exceeds quota, a deterministic fallback brief is generated preserving all issue facts and M1 repository intelligence, with honest `ai_status="unavailable_or_invalid"`. Untrusted issue descriptions and comments are bounded and defensively sanitized. Plain text JSX rendering with interactive self-assessment readiness checklist.
+13. **Guided Implementation Engine (Pillars 3 & 4 - LEARN & BUILD):** M3 delivers an interactive, evidence-grounded guided implementation workspace. Steps are grounded in verified repository files, with hallucinated paths strictly dropped. Up to 3 progressive hints per step reduce ambiguity gradually upon explicit user reveal without spoiling the solution prematurely. Implementation approaches contrast viable trade-offs, edge cases, and regression risks. Optional code suggestions are strictly labeled `unverified_educational_draft` and never executed, applied, or committed. Contributor controls their step progress (`not_started`, `in_progress`, `understood`, `completed`); AI never auto-completes steps.
 
 ---
 
@@ -73,6 +75,21 @@
 ---
 
 ## Recent Activity & Test Results
+
+- **PatchLoom 2.0 M3 Guided Implementation Workspace (2026-11-02):**
+  - **Full Backend Pytest Suite:** 130 passed in 4.78s (`pytest backend/tests/ -v`).
+  - Added `test_guided_implementation.py` with 8 comprehensive unit tests:
+    - `test_deterministic_fallback_guided_plan`: Verified evidence-grounded fallback roadmap, progressive hint hierarchy, checkpoints, alternative approaches, and educational patch labeling.
+    - `test_build_guided_implementation_prompt_wrapping_and_truncation`: Verified prompt delimiters `<untrusted_issue_data>`, `<untrusted_file_tree>`, character bounds ($\le 60,000$ chars).
+    - `test_generate_guided_implementation_plan_success`: Grounding retention of valid paths and dropping of hallucinated paths across steps, targets, and patches.
+    - `test_generate_guided_implementation_invalid_output_retry`: Verified single retry upon `InvalidModelOutputError`.
+    - `test_generate_guided_implementation_quota_fallback`: Verified immediate fallback on `QuotaExceededError` without retries, preserving context with `ai_status="unavailable_or_invalid"`.
+    - `test_load_fixture_guided_implementation`: Verified offline fixture plan loading for pre-saved and dynamic synthesis issues across Scenarios A & B.
+    - `test_api_guided_implementation_demo_mode`: Verified `POST /api/guided-implementation` returns 200 with valid schema in demo mode.
+    - `test_api_guided_implementation_invalid_url`: Verified strict 400 rejection on non-GitHub URLs.
+  - **Frontend Production Build Verified:** `tsc && vite build` compiled and packaged cleanly in 625ms (zero TypeScript errors, bundle size 203.44 kB).
+  - **Frontend Implementation:** Built interactive `GuidedImplementationModal.tsx` featuring step navigation sidebar with progress indicators, 3-tier progressive hint accordions (`gentle direction`, `specific investigation`, `technical guidance`), contributor-controlled step checkpoints (`not_started`, `in_progress`, `understood`, `completed`), alternative implementation approaches comparison view, code exploration targets view, and collapsed educational code suggestion cards with strict warning notices. Added launch button to `LearnModal` and direct action button to `IssueCard`.
+  - **Demo Rehearsal Script Updated:** `scratch/rehearse_demo.py` updated with Step 3c testing `POST /api/guided-implementation` end-to-end; verified 100% pass locally.
  
 - **Backend Pytest Suite:** 110 passed in 6.47s (`pytest backend/tests/ -v`).
   - `test_repo_intelligence.py`: 15 tests passed (deterministic overview, language distribution, technologies, entry points, test & CI intelligence, documentation extraction, module partitioning, issue-to-module mapping, demo mode, API endpoint).

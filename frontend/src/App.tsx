@@ -1,10 +1,19 @@
 import { useState, useEffect } from 'react';
-import { AnalyzeResponse, CandidateIssue, ContributorProfile, HealthData, IssueLearningBrief, PlanResponse } from './types';
+import {
+  AnalyzeResponse,
+  CandidateIssue,
+  ContributorProfile,
+  GuidedImplementationPlan,
+  HealthData,
+  IssueLearningBrief,
+  PlanResponse,
+} from './types';
 import { InputForm } from './components/InputForm';
 import { EvidenceLegend } from './components/EvidenceLegend';
 import { IssueCard } from './components/IssueCard';
 import { PlanModal } from './components/PlanModal';
 import { LearnModal } from './components/LearnModal';
+import { GuidedImplementationModal } from './components/GuidedImplementationModal';
 import { RepoIntelligenceView } from './components/RepoIntelligenceView';
 
 export default function App() {
@@ -23,6 +32,10 @@ export default function App() {
   const [learningIssueId, setLearningIssueId] = useState<number | null>(null);
   const [activeLearningBrief, setActiveLearningBrief] = useState<IssueLearningBrief | null>(null);
   const [learnError, setLearnError] = useState<string | null>(null);
+
+  const [guidedIssueId, setGuidedIssueId] = useState<number | null>(null);
+  const [activeGuidedPlan, setActiveGuidedPlan] = useState<GuidedImplementationPlan | null>(null);
+  const [guidedError, setGuidedError] = useState<string | null>(null);
 
   const [currentRepoUrl, setCurrentRepoUrl] = useState<string>('');
   const [currentProfile, setCurrentProfile] = useState<ContributorProfile | null>(null);
@@ -138,6 +151,38 @@ export default function App() {
     }
   };
 
+  const handleSelectGuided = async (issueNumber: number) => {
+    if (!currentProfile || !currentRepoUrl) return;
+
+    setGuidedIssueId(issueNumber);
+    setGuidedError(null);
+
+    try {
+      const resp = await fetch('/api/guided-implementation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          repo_url: currentRepoUrl,
+          issue_number: issueNumber,
+          profile: currentProfile,
+          demo: currentDemo,
+          learning_brief: activeLearningBrief?.issue_number === issueNumber ? activeLearningBrief : null,
+        }),
+      });
+
+      const data = await resp.json();
+      if (!resp.ok) {
+        throw new Error(data.detail || data.error || `HTTP ${resp.status}`);
+      }
+
+      setActiveGuidedPlan(data);
+    } catch (err: any) {
+      setGuidedError(`Failed to generate guided implementation for #${issueNumber}: ${err.message}`);
+    } finally {
+      setGuidedIssueId(null);
+    }
+  };
+
   return (
     <div className="container">
       <header>
@@ -184,6 +229,12 @@ export default function App() {
         {learnError && (
           <div className="error-banner">
             <strong>Learning Error:</strong> {learnError}
+          </div>
+        )}
+
+        {guidedError && (
+          <div className="error-banner">
+            <strong>Guided Implementation Error:</strong> {guidedError}
           </div>
         )}
 
@@ -255,6 +306,8 @@ export default function App() {
                       isPlanningThis={planningIssueId === issue.number}
                       onSelectLearn={handleSelectLearn}
                       isLearningThis={learningIssueId === issue.number}
+                      onSelectGuided={(issue) => handleSelectGuided(issue.number)}
+                      isGuidingThis={guidedIssueId === issue.number}
                     />
                   ))}
                 </div>
@@ -269,7 +322,20 @@ export default function App() {
       )}
 
       {activeLearningBrief && (
-        <LearnModal brief={activeLearningBrief} onClose={() => setActiveLearningBrief(null)} />
+        <LearnModal
+          key={activeLearningBrief.issue_number}
+          brief={activeLearningBrief}
+          onClose={() => setActiveLearningBrief(null)}
+          onStartGuidedImplementation={handleSelectGuided}
+        />
+      )}
+
+      {activeGuidedPlan && (
+        <GuidedImplementationModal
+          key={activeGuidedPlan.issue_number}
+          plan={activeGuidedPlan}
+          onClose={() => setActiveGuidedPlan(null)}
+        />
       )}
     </div>
   );

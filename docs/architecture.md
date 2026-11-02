@@ -210,7 +210,52 @@ The Issue Learning Engine bridges repository intelligence and issue discovery to
 
 ---
 
-## 7. Realistic 100× Scaling Discussion (Future Work)
+## 7. Guided Implementation Engine (LEARN & BUILD Pillar — M3)
+
+The **Guided Implementation Engine** ([`guided_implementation.py`](file:///c:/Users/User/OneDrive/Desktop/Projects/PatchLoom/backend/app/guided_implementation.py)) powers the **LEARN & BUILD** product pillar. It provides a structured, multi-step implementation workspace that guides contributors through an issue with progressive hints and optional educational code suggestions without writing the code for them.
+
+### Subsystem Architecture
+
+1. **Practical Implementation Roadmap:**
+   - Decomposes the contribution into an ordered sequence of focused steps ($3 \le steps \le 7$).
+   - Each step specifies title, objective, why it matters, grounded files, what to inspect, expected outcome, dependencies, and concrete completion criteria.
+   - Grounding Invariant: All files associated with steps are strictly validated against the ingested repository tree. Hallucinated paths are dropped.
+
+2. **Progressive Hint System (3-Tier Hint Hierarchy):**
+   - For each step, precomputes up to 3 progressive hints that contributors reveal on explicit request:
+     * **Level 1 (Gentle Direction):** High-level orientation, architectural pointers, and where to start looking.
+     * **Level 2 (Specific Investigation):** Targeted functions, parameters, configuration flags, or error conditions to inspect.
+     * **Level 3 (Technical Guidance & Edge Cases):** Concrete technical caveats, edge-case warnings, and idiomatic patterns.
+   - Distinguishes `evidence_based` guidance (derived from verified repository code/docs) from `conceptual_guidance`.
+   - Client-side persistence preserves revealed hint state per issue during the session.
+
+3. **Grounded Code Exploration Guidance:**
+   - Highlights critical repository files with target symbols (functions, classes, doc headings).
+   - Specifies runtime behavior or error flows to observe and suggested search terms.
+   - Zero symbol or path hallucination: paths must exist in the ingested file tree.
+
+4. **Alternative Implementation Approaches:**
+   - Evaluates multiple viable approaches (e.g. surgical minimal fix vs comprehensive defensive restructuring).
+   - Compares design patterns, pros, cons/trade-offs, edge cases, regression risks, and unanswered questions for maintainers.
+   - Recommends an optimal starting approach suited to the contributor's experience level.
+
+5. **Optional Educational Code Suggestions:**
+   - Strictly optional code illustrations requested explicitly by contributor interaction.
+   - Always labeled with `verification_status="unverified_educational_draft"`.
+   - Accompanied by explicit assumptions, expected effect, and potential risks.
+   - Strict Safety Invariant: Code suggestions are never executed, never applied automatically to repository files, and never committed.
+
+6. **Self-Reflection Step Checkpoints & Contributor Progress:**
+   - Each roadmap step includes a self-reflection question and verification guidance.
+   - Contributor directly controls their progress status (`not_started`, `in_progress`, `understood`, `completed`). The AI never auto-completes steps.
+
+7. **Zero-AI Deterministic Fallback & Fixture Support:**
+   - When Gemma 4 inference fails, times out, or exceeds quota, the engine synthesizes an evidence-backed deterministic roadmap and progressive hints from the repository intelligence, setting `ai_status="unavailable_or_invalid"`.
+   - In offline/demo mode (`demo=true` or `DEMO_MODE=1`), serves validated snapshots or dynamic synthesis with zero external network or model calls.
+
+---
+
+## 8. Realistic 100× Scaling Discussion (Future Work)
 
 At 100× active users or high concurrent traffic, PatchLoom's architecture would encounter specific upstream bottlenecks. Below is an honest engineering analysis of these limits and the planned future architecture:
 

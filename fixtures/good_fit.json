@@ -408,5 +408,250 @@
       },
       "checked_at": "2026-10-18T10:00:00Z"
     }
+  },
+  "guided_implementation_plans": {
+    "6542": {
+      "issue_number": 6542,
+      "issue_title": "Improve timeout documentation and example for streaming requests",
+      "issue_url": "https://github.com/psf/requests/issues/6542",
+      "experience_level": "intermediate",
+      "overview": "Guided implementation workspace for issue #6542. Walks through locating streaming documentation, constructing practical code examples explaining connect vs read timeouts, building docs locally with Sphinx, and self-verifying changes.",
+      "steps": [
+        {
+          "id": "step-1",
+          "order": 1,
+          "title": "Locate and Review Streaming Documentation",
+          "objective": "Inspect docs/user/advanced.rst to understand how streaming and timeout are currently presented.",
+          "why_it_matters": "Ensures you see the current explanation and terminology before drafting additions.",
+          "files": ["docs/user/advanced.rst"],
+          "what_to_inspect": "Search for the 'Streaming Requests' section and check where stream=True and iter_content() are introduced.",
+          "expected_outcome": "Identification of the exact paragraph where timeout behavior should be clarified.",
+          "dependencies": [],
+          "completion_criteria": "You can point to the lines in docs/user/advanced.rst where the timeout clarification belongs.",
+          "hints": [
+            {
+              "level": 1,
+              "title": "Finding the Section",
+              "content": "Open docs/user/advanced.rst and search for 'Streaming Requests'.",
+              "kind": "evidence_based"
+            },
+            {
+              "level": 2,
+              "title": "Current Timeout Coverage",
+              "content": "Notice that stream=True is explained, but timeout tuple semantics (connect, read) during iter_content() are not explicitly mentioned.",
+              "kind": "evidence_based"
+            },
+            {
+              "level": 3,
+              "title": "Target Paragraph",
+              "content": "Plan to add a paragraph right after the iter_content() code block explaining how the read timeout applies to each chunk.",
+              "kind": "conceptual_guidance"
+            }
+          ],
+          "checkpoint": {
+            "question": "Can you describe how stream=True currently works in this section?",
+            "verification_guidance": "Verify you understand that response headers are downloaded immediately, but body bytes are deferred."
+          },
+          "patch_suggestion": null
+        },
+        {
+          "id": "step-2",
+          "order": 2,
+          "title": "Draft Timeout Explanation & Example Code",
+          "objective": "Add clear explanation distinguishing connection timeout from chunk read timeout with copy-pasteable example.",
+          "why_it_matters": "Directly resolves the core issue by preventing users from hanging indefinitely on slow streaming sockets.",
+          "files": ["docs/user/advanced.rst"],
+          "what_to_inspect": "Draft clear reStructuredText prose with code-block directive showing timeout=(3.05, 27).",
+          "expected_outcome": "Clear, accurate documentation text and code example added to docs/user/advanced.rst.",
+          "dependencies": ["step-1"],
+          "completion_criteria": "Explanation and Python snippet formatted using standard RST directives.",
+          "hints": [
+            {
+              "level": 1,
+              "title": "Tuple Timeout Syntax",
+              "content": "Remember Requests accepts a tuple: timeout=(connect_timeout, read_timeout).",
+              "kind": "evidence_based"
+            },
+            {
+              "level": 2,
+              "title": "Chunk Iteration Behavior",
+              "content": "Explain that read timeout is not a cap on total download duration, but the maximum allowed time between subsequent byte chunks.",
+              "kind": "conceptual_guidance"
+            },
+            {
+              "level": 3,
+              "title": "RST Code Block Directive",
+              "content": "Use '.. code-block:: python' with 4-space indentation for the code example.",
+              "kind": "evidence_based"
+            }
+          ],
+          "checkpoint": {
+            "question": "Does your code example clearly illustrate tuple timeout with stream=True?",
+            "verification_guidance": "Check that requests.get('https://httpbin.org/stream/20', stream=True, timeout=(3.05, 27)) is demonstrated."
+          },
+          "patch_suggestion": {
+            "target_path": "docs/user/advanced.rst",
+            "target_symbol": "Streaming Requests",
+            "summary": "Clarify connect vs read timeouts when streaming response chunks.",
+            "code_snippet": "When streaming with ``stream=True``, the ``timeout`` parameter applies differently:\n\n.. code-block:: python\n\n    # Connect timeout applies to initial TCP handshake (3.05s);\n    # Read timeout applies to each individual chunk iteration (27s):\n    with requests.get('https://httpbin.org/stream/20', stream=True, timeout=(3.05, 27)) as r:\n        for chunk in r.iter_content(chunk_size=1024):\n            process_chunk(chunk)\n",
+            "assumptions": ["Assumes standard Requests API with httpbin.org sample endpoint."],
+            "expected_effect": "Users understand how to prevent hanging sockets during chunked downloads.",
+            "potential_risks": ["Check that RST compiles without syntax or indentation errors."],
+            "verification_status": "unverified_educational_draft"
+          }
+        },
+        {
+          "id": "step-3",
+          "order": 3,
+          "title": "Build Documentation Locally with Sphinx",
+          "objective": "Run the documentation build command to verify zero RST syntax or formatting warnings.",
+          "why_it_matters": "Requests documentation CI fails if Sphinx emits warnings; local verification avoids failed PR checks.",
+          "files": ["docs/Makefile", "docs/conf.py"],
+          "what_to_inspect": "Run make html in docs/ and inspect stdout/stderr for any Sphinx warnings.",
+          "expected_outcome": "HTML documentation builds into docs/_build/html with zero warnings.",
+          "dependencies": ["step-2"],
+          "completion_criteria": "Sphinx build terminates with exit code 0 and no RST warnings.",
+          "hints": [
+            {
+              "level": 1,
+              "title": "Sphinx Build Command",
+              "content": "Navigate to the docs directory and run 'make html'.",
+              "kind": "evidence_based"
+            },
+            {
+              "level": 2,
+              "title": "Checking Warnings",
+              "content": "Look for messages starting with 'WARNING:'; ensure all directives are properly indented.",
+              "kind": "evidence_based"
+            },
+            {
+              "level": 3,
+              "title": "Browser Inspection",
+              "content": "Open docs/_build/html/user/advanced.html in your browser to check visual layout.",
+              "kind": "conceptual_guidance"
+            }
+          ],
+          "checkpoint": {
+            "question": "Did Sphinx build without warnings or broken cross-references?",
+            "verification_guidance": "Confirm 'build succeeded' message in terminal."
+          },
+          "patch_suggestion": null
+        },
+        {
+          "id": "step-4",
+          "order": 4,
+          "title": "Review Git Diff & Formulate PR Notes",
+          "objective": "Review changes with git diff and prepare a clear pull request description referencing #6542.",
+          "why_it_matters": "A clean, atomic diff and structured PR description expedite maintainer review and approval.",
+          "files": ["docs/user/advanced.rst"],
+          "what_to_inspect": "Inspect git diff to confirm no trailing whitespace or unintended edits in other files.",
+          "expected_outcome": "Clean git diff modifying only docs/user/advanced.rst.",
+          "dependencies": ["step-3"],
+          "completion_criteria": "git diff contains only the intended documentation improvements.",
+          "hints": [
+            {
+              "level": 1,
+              "title": "Checking Git Diff",
+              "content": "Run 'git diff docs/user/advanced.rst' to review your exact changes.",
+              "kind": "evidence_based"
+            },
+            {
+              "level": 2,
+              "title": "Commit Message Convention",
+              "content": "Use conventional commit format: 'docs: clarify streaming timeout behavior (#6542)'.",
+              "kind": "evidence_based"
+            },
+            {
+              "level": 3,
+              "title": "PR Description",
+              "content": "State what was added and mention that docs were built locally with zero warnings.",
+              "kind": "conceptual_guidance"
+            }
+          ],
+          "checkpoint": {
+            "question": "Is your diff limited strictly to the timeout documentation clarification?",
+            "verification_guidance": "Confirm git status shows only docs/user/advanced.rst modified."
+          },
+          "patch_suggestion": null
+        }
+      ],
+      "exploration_targets": [
+        {
+          "path": "docs/user/advanced.rst",
+          "module_name": "docs",
+          "why_relevant": "Primary documentation file containing the Streaming Requests section.",
+          "target_symbols": ["Streaming Requests", "iter_content"],
+          "behavior_to_observe": "Observe how stream=True and iter_content() are explained and structured.",
+          "suggested_search_terms": ["Streaming Requests", "stream=True", "timeout"],
+          "evidence": {
+            "status": "verified",
+            "source": "issue_description_mention",
+            "observed_at": "2026-10-18T10:00:00Z",
+            "detail": "File explicitly referenced in issue description."
+          }
+        },
+        {
+          "path": "docs/user/quickstart.rst",
+          "module_name": "docs",
+          "why_relevant": "Basic timeout documentation file for reference and consistency.",
+          "target_symbols": ["Timeouts"],
+          "behavior_to_observe": "Check basic timeout terminology to maintain consistency with advanced streaming.",
+          "suggested_search_terms": ["Timeouts", "timeout"],
+          "evidence": {
+            "status": "inference",
+            "source": "docs_module_mapping",
+            "observed_at": "2026-10-18T10:00:00Z",
+            "detail": "Cross-referenced doc in same module."
+          }
+        }
+      ],
+      "approaches": [
+        {
+          "approach_id": "approach-advanced-inline",
+          "title": "Inline Clarification in Streaming Requests (Recommended)",
+          "summary": "Add clear paragraph and copy-pasteable tuple timeout code snippet directly within Streaming Requests in docs/user/advanced.rst.",
+          "relevant_design_patterns": ["Contextual Documentation", "Minimal Blast Radius"],
+          "pros": [
+            "Keeps the PR small and easy to review",
+            "Directly answers the user question at the point of need",
+            "Zero risk of breaking existing doc links"
+          ],
+          "cons_and_tradeoffs": [
+            "Does not alter basic quickstart timeouts guide"
+          ],
+          "edge_cases": ["Ensure Sphinx code-block syntax conforms to documentation guidelines."],
+          "regression_risks": ["Low; strictly documentation modification."],
+          "unanswered_questions": ["Should we also add a one-line tip in quickstart.rst?"]
+        },
+        {
+          "approach_id": "approach-dedicated-subsection",
+          "title": "Dedicated Subsection with Comprehensive Network Diagram",
+          "summary": "Create a new subsection under Advanced with a detailed explanation of socket connection phases and chunk read cycles.",
+          "relevant_design_patterns": ["Deep Dive Guide"],
+          "pros": [
+            "Comprehensive explanation covering low-level urllib3 mechanics"
+          ],
+          "cons_and_tradeoffs": [
+            "Larger changes may take longer for maintainers to review",
+            "Might be too verbose for users wanting quick practical syntax"
+          ],
+          "edge_cases": ["Maintaining visual cleanliness across Sphinx mobile and desktop themes."],
+          "regression_risks": ["Table of contents reorganization."],
+          "unanswered_questions": ["Does the project maintainer want deep urllib3 architectural details in user docs?"]
+        }
+      ],
+      "recommended_approach_id": "approach-advanced-inline",
+      "ai_status": "complete",
+      "warnings": [
+        "Demo/Fixture mode active. Showing validated offline snapshot data."
+      ],
+      "evidence": {
+        "status": "verified",
+        "source": "fixture_snapshot",
+        "observed_at": "2026-10-18T10:00:00Z",
+        "detail": "Validated offline snapshot guided implementation plan."
+      },
+      "checked_at": "2026-10-18T10:00:00Z"
+    }
   }
 }

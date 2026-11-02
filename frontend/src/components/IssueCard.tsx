@@ -8,6 +8,8 @@ interface IssueCardProps {
   isPlanningThis: boolean;
   onSelectLearn?: (issue: CandidateIssue) => void;
   isLearningThis?: boolean;
+  onSelectGuided?: (issue: CandidateIssue) => void;
+  isGuidingThis?: boolean;
 }
 
 export const IssueCard: React.FC<IssueCardProps> = ({
@@ -17,6 +19,8 @@ export const IssueCard: React.FC<IssueCardProps> = ({
   isPlanningThis,
   onSelectLearn,
   isLearningThis,
+  onSelectGuided,
+  isGuidingThis,
 }) => {
   const [expanded, setExpanded] = useState(false);
 
@@ -99,7 +103,19 @@ export const IssueCard: React.FC<IssueCardProps> = ({
             disabled={isLearningThis}
             style={{ fontWeight: 600, borderColor: '#6366f1', color: '#4f46e5' }}
           >
-            {isLearningThis ? 'Generating Brief...' : '🧠 Learn & Understand'}
+            {isLearningThis ? 'Generating Brief...' : '🧠 Learn'}
+          </button>
+        )}
+
+        {onSelectGuided && (
+          <button
+            type="button"
+            className="btn-secondary guided-btn"
+            onClick={() => onSelectGuided(issue)}
+            disabled={isGuidingThis}
+            style={{ fontWeight: 600, borderColor: '#2563eb', color: '#2563eb' }}
+          >
+            {isGuidingThis ? 'Generating Roadmap...' : '🚀 Guided Build'}
           </button>
         )}
 

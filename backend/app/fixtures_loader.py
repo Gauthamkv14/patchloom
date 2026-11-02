@@ -9,20 +9,27 @@ from typing import Optional
 from app.schemas import (
     AnalyzeResponse,
     CandidateIssue,
+    CodeExplorationTarget,
     ContributorProfile,
+    GuidedImplementationPlan,
+    ImplementationApproach,
+    ImplementationStep,
     IntelligenceEvidence,
     IssueExplanation,
     IssueLearningBrief,
     IssueRequirement,
     LearningConcept,
     LearningObjective,
+    PatchSuggestion,
     PlanNote,
     PlanResponse,
     PlanStep,
+    ProgressiveHint,
     ReadinessChecklistItem,
     RelevantInvestigationFile,
     RepoMetadata,
     SignalEvidence,
+    StepCheckpoint,
 )
 from app.repo_intelligence import (
     generate_repository_intelligence,
@@ -472,4 +479,122 @@ def load_fixture_learn(
         evidence=IntelligenceEvidence(**brief_data["evidence"]),
         checked_at=brief_data.get("checked_at", observed),
     )
+
+
+def load_fixture_guided_implementation(
+    repo_url: str,
+    issue_number: int,
+    profile: Optional[ContributorProfile] = None,
+) -> GuidedImplementationPlan:
+    """Load an offline fixture guided implementation plan with zero external network or model calls."""
+    data = get_fixture_data_for_url(repo_url)
+    plans = data.get("guided_implementation_plans", {})
+    plan_data = plans.get(str(issue_number))
+    observed = datetime.now(timezone.utc).isoformat()
+    level = profile.experience_level if profile else "beginner"
+
+    if plan_data:
+        # Pre-saved fixture plan
+        steps = []
+        for s in plan_data.get("steps", []):
+            patch_sug = None
+            if s.get("patch_suggestion"):
+                ps = s["patch_suggestion"]
+                patch_sug = PatchSuggestion(
+                    target_path=ps["target_path"],
+                    target_symbol=ps.get("target_symbol"),
+                    summary=ps["summary"],
+                    code_snippet=ps["code_snippet"],
+                    assumptions=ps.get("assumptions", []),
+                    expected_effect=ps["expected_effect"],
+                    potential_risks=ps.get("potential_risks", []),
+                    verification_status="unverified_educational_draft",
+                )
+            steps.append(
+                ImplementationStep(
+                    id=s["id"],
+                    order=s["order"],
+                    title=s["title"],
+                    objective=s["objective"],
+                    why_it_matters=s["why_it_matters"],
+                    files=s.get("files", []),
+                    what_to_inspect=s["what_to_inspect"],
+                    expected_outcome=s["expected_outcome"],
+                    dependencies=s.get("dependencies", []),
+                    completion_criteria=s["completion_criteria"],
+                    hints=[ProgressiveHint(**h) for h in s.get("hints", [])],
+                    checkpoint=StepCheckpoint(**s["checkpoint"]),
+                    patch_suggestion=patch_sug,
+                )
+            )
+
+        exploration_targets = [
+            CodeExplorationTarget(
+                path=t["path"],
+                module_name=t.get("module_name"),
+                why_relevant=t["why_relevant"],
+                target_symbols=t.get("target_symbols", []),
+                behavior_to_observe=t.get("behavior_to_observe", "Inspect behavior"),
+                suggested_search_terms=t.get("suggested_search_terms", []),
+                evidence=IntelligenceEvidence(**t["evidence"]),
+            )
+            for t in plan_data.get("exploration_targets", [])
+        ]
+
+        approaches = [
+            ImplementationApproach(**a) for a in plan_data.get("approaches", [])
+        ]
+
+        return GuidedImplementationPlan(
+            issue_number=plan_data["issue_number"],
+            issue_title=plan_data["issue_title"],
+            issue_url=plan_data["issue_url"],
+            experience_level=level,  # type: ignore
+            overview=plan_data["overview"],
+            steps=steps,
+            exploration_targets=exploration_targets,
+            approaches=approaches,
+            recommended_approach_id=plan_data.get("recommended_approach_id", approaches[0].approach_id if approaches else "default-approach"),
+            ai_status=plan_data.get("ai_status", "complete"),
+            warnings=plan_data.get("warnings", ["Demo/Fixture mode active. Showing validated offline snapshot data."]),
+            evidence=IntelligenceEvidence(**plan_data["evidence"]),
+            checked_at=plan_data.get("checked_at", observed),
+        )
+
+    # Dynamic fallback synthesis for issues not pre-saved in fixture
+    matched_issue = next((i for i in data.get("issues", []) if i["number"] == issue_number), None)
+    title = matched_issue["title"] if matched_issue else f"Issue #{issue_number}"
+    url = matched_issue["url"] if matched_issue else f"{repo_url}/issues/{issue_number}"
+    body = matched_issue.get("body", "") if matched_issue else ""
+    tree = data.get("file_tree", [])
+    docs = data.get("docs", {})
+    repo_data = data.get("repo", {})
+
+    intel = generate_repository_intelligence(
+        owner=repo_data.get("owner", "org"),
+        repo_name=repo_data.get("name", "repo"),
+        languages=repo_data.get("languages", []),
+        file_tree=tree,
+        docs_metadata=docs,
+        candidate_issues=[{"number": issue_number, "title": title, "body": body, "labels": matched_issue.get("labels", []) if matched_issue else []}],
+        is_truncated=repo_data.get("tree_truncated", False),
+    )
+
+    from app.guided_implementation import create_deterministic_fallback_guided_plan
+
+    plan = create_deterministic_fallback_guided_plan(
+        issue_number=issue_number,
+        issue_title=title,
+        issue_url=url,
+        issue_body=body,
+        labels=matched_issue.get("labels", []) if matched_issue else [],
+        profile=profile or ContributorProfile(skills=["python"], experience_level="beginner", available_hours=3.0),
+        file_tree=tree,
+        docs_metadata=docs,
+        intelligence_report=intel,
+        learning_brief=None,
+        warning_reason="Demo/Fixture mode active. Showing validated offline snapshot guided implementation plan.",
+    )
+    plan.ai_status = "complete"
+    return plan
 
