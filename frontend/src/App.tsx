@@ -7,6 +7,10 @@ import {
   HealthData,
   IssueLearningBrief,
   PlanResponse,
+  TestExecutionPlan,
+  TestExecutionResult,
+  DraftPR,
+  VerificationAnalysisReport,
 } from './types';
 import { InputForm } from './components/InputForm';
 import { EvidenceLegend } from './components/EvidenceLegend';
@@ -14,6 +18,7 @@ import { IssueCard } from './components/IssueCard';
 import { PlanModal } from './components/PlanModal';
 import { LearnModal } from './components/LearnModal';
 import { GuidedImplementationModal } from './components/GuidedImplementationModal';
+import { VerificationModal } from './components/VerificationModal';
 import { RepoIntelligenceView } from './components/RepoIntelligenceView';
 
 export default function App() {
@@ -36,6 +41,15 @@ export default function App() {
   const [guidedIssueId, setGuidedIssueId] = useState<number | null>(null);
   const [activeGuidedPlan, setActiveGuidedPlan] = useState<GuidedImplementationPlan | null>(null);
   const [guidedError, setGuidedError] = useState<string | null>(null);
+
+  const [verifyingIssueId, setVerifyingIssueId] = useState<number | null>(null);
+  const [activeVerificationReport, setActiveVerificationReport] = useState<VerificationAnalysisReport | null>(null);
+  const [verificationError, setVerificationError] = useState<string | null>(null);
+  const [isAnalyzingVerification, setIsAnalyzingVerification] = useState<boolean>(false);
+  const [isExecutingTests, setIsExecutingTests] = useState<boolean>(false);
+  const [testExecutionResult, setTestExecutionResult] = useState<TestExecutionResult | null>(null);
+  const [isPreparingPR, setIsPreparingPR] = useState<boolean>(false);
+  const [activeDraftPR, setActiveDraftPR] = useState<DraftPR | null>(null);
 
   const [currentRepoUrl, setCurrentRepoUrl] = useState<string>('');
   const [currentProfile, setCurrentProfile] = useState<ContributorProfile | null>(null);
@@ -183,6 +197,139 @@ export default function App() {
     }
   };
 
+  const handleSelectVerify = async (issueNumber: number, customDiff?: string) => {
+    if (!currentRepoUrl) return;
+
+    setVerifyingIssueId(issueNumber);
+    setVerificationError(null);
+    setIsAnalyzingVerification(true);
+
+    try {
+      const resp = await fetch('/api/verification/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          repo_url: currentRepoUrl,
+          issue_number: issueNumber,
+          diff_text: customDiff || '',
+          profile: currentProfile,
+          demo: currentDemo,
+        }),
+      });
+
+      const data = await resp.json();
+      if (!resp.ok) {
+        throw new Error(data.detail || data.error || `HTTP ${resp.status}`);
+      }
+
+      setActiveVerificationReport(data);
+      // Reset execution & draft PR on fresh verification report
+      setTestExecutionResult(null);
+      setActiveDraftPR(null);
+    } catch (err: any) {
+      setVerificationError(`Failed to verify changes for #${issueNumber}: ${err.message}`);
+    } finally {
+      setVerifyingIssueId(null);
+      setIsAnalyzingVerification(false);
+    }
+  };
+
+  const handleReAnalyzeDiff = async (diffText: string) => {
+    if (!activeVerificationReport || !currentRepoUrl) return;
+    setIsAnalyzingVerification(true);
+    try {
+      const resp = await fetch('/api/verification/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          repo_url: currentRepoUrl,
+          issue_number: activeVerificationReport.issue_number,
+          diff_text: diffText,
+          profile: currentProfile,
+          demo: currentDemo,
+        }),
+      });
+
+      const data = await resp.json();
+      if (!resp.ok) {
+        throw new Error(data.detail || data.error || `HTTP ${resp.status}`);
+      }
+
+      setActiveVerificationReport(data);
+    } catch (err: any) {
+      setVerificationError(`Failed to re-analyze diff: ${err.message}`);
+    } finally {
+      setIsAnalyzingVerification(false);
+    }
+  };
+
+  const handleExecuteTestPlan = async (
+    plan: TestExecutionPlan,
+    diffText: string,
+    authorized: boolean,
+  ) => {
+    if (!activeVerificationReport || !currentRepoUrl) return;
+    setIsExecutingTests(true);
+    try {
+      const resp = await fetch('/api/verification/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          repo_url: currentRepoUrl,
+          issue_number: activeVerificationReport.issue_number,
+          execution_plan: plan,
+          diff_text: diffText,
+          authorized,
+          demo: currentDemo,
+        }),
+      });
+
+      const data = await resp.json();
+      if (!resp.ok) {
+        throw new Error(data.detail || data.error || `HTTP ${resp.status}`);
+      }
+
+      setTestExecutionResult(data);
+    } catch (err: any) {
+      setVerificationError(`Test execution error: ${err.message}`);
+    } finally {
+      setIsExecutingTests(false);
+    }
+  };
+
+  const handlePrepareDraftPR = async (diffText: string) => {
+    if (!activeVerificationReport || !currentRepoUrl) return;
+    setIsPreparingPR(true);
+    try {
+      const resp = await fetch('/api/verification/prepare-pr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          repo_url: currentRepoUrl,
+          issue_number: activeVerificationReport.issue_number,
+          diff_text: diffText,
+          profile: currentProfile,
+          execution_result: testExecutionResult,
+          review_findings: activeVerificationReport.review_findings,
+          regression_risks: activeVerificationReport.regression_risks,
+          readiness: activeVerificationReport.readiness,
+          demo: currentDemo,
+        }),
+      });
+
+      const data = await resp.json();
+      if (!resp.ok) {
+        throw new Error(data.detail || data.error || `HTTP ${resp.status}`);
+      }
+
+      setActiveDraftPR(data);
+    } catch (err: any) {
+      setVerificationError(`Failed to prepare draft PR: ${err.message}`);
+    } finally {
+      setIsPreparingPR(false);
+    }
+  };
+
   return (
     <div className="container">
       <header>
@@ -235,6 +382,12 @@ export default function App() {
         {guidedError && (
           <div className="error-banner">
             <strong>Guided Implementation Error:</strong> {guidedError}
+          </div>
+        )}
+
+        {verificationError && (
+          <div className="error-banner">
+            <strong>Verification Error:</strong> {verificationError}
           </div>
         )}
 
@@ -308,6 +461,8 @@ export default function App() {
                       isLearningThis={learningIssueId === issue.number}
                       onSelectGuided={(issue) => handleSelectGuided(issue.number)}
                       isGuidingThis={guidedIssueId === issue.number}
+                      onSelectVerify={(issue) => handleSelectVerify(issue.number)}
+                      isVerifyingThis={verifyingIssueId === issue.number}
                     />
                   ))}
                 </div>
@@ -335,6 +490,23 @@ export default function App() {
           key={activeGuidedPlan.issue_number}
           plan={activeGuidedPlan}
           onClose={() => setActiveGuidedPlan(null)}
+          onOpenVerification={handleSelectVerify}
+        />
+      )}
+
+      {activeVerificationReport && (
+        <VerificationModal
+          key={activeVerificationReport.issue_number}
+          report={activeVerificationReport}
+          onClose={() => setActiveVerificationReport(null)}
+          onReAnalyzeDiff={handleReAnalyzeDiff}
+          isAnalyzingDiff={isAnalyzingVerification}
+          onExecuteTestPlan={handleExecuteTestPlan}
+          isExecutingTests={isExecutingTests}
+          executionResult={testExecutionResult}
+          onPrepareDraftPR={handlePrepareDraftPR}
+          isPreparingPR={isPreparingPR}
+          draftPR={activeDraftPR}
         />
       )}
     </div>

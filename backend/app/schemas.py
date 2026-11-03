@@ -613,5 +613,215 @@ class GuidedImplementationRequest(BaseModel):
     learning_brief: Optional[IssueLearningBrief] = Field(default=None, description="Optional pre-existing IssueLearningBrief to reuse")
 
 
+# =====================================================================
+# M4: Verification & Review Schemas (VERIFY & CONTRIBUTE Pillar)
+# =====================================================================
+
+
+class DiffChangeFile(BaseModel):
+    """A file touched by the contributor's diff."""
+
+    path: str = Field(..., description="Relative file path")
+    old_path: Optional[str] = Field(default=None, description="Original path if renamed or deleted")
+    change_type: Literal["added", "modified", "deleted", "renamed"] = Field(..., description="Type of change")
+    lines_added: int = Field(default=0, ge=0)
+    lines_removed: int = Field(default=0, ge=0)
+    detected_symbols: list[str] = Field(default_factory=list, description="Functions or classes modified in this file")
+
+
+class ParsedDiff(BaseModel):
+    """Deterministic structural breakdown of a contributor-provided git diff."""
+
+    total_files: int = Field(default=0, ge=0)
+    lines_added: int = Field(default=0, ge=0)
+    lines_removed: int = Field(default=0, ge=0)
+    files: list[DiffChangeFile] = Field(default_factory=list)
+    raw_diff_sample: str = Field(default="", description="Bounded raw diff excerpt for display")
+    is_truncated: bool = Field(default=False)
+    warnings: list[str] = Field(default_factory=list)
+
+
+class DiscoveredTest(BaseModel):
+    """A candidate test file identified as relevant to the contributor's changes."""
+
+    test_file: str = Field(..., description="Relative test file path")
+    framework: str = Field(..., description="Test framework (e.g. pytest, Jest, Vitest)")
+    test_command: str = Field(..., description="Specific command to run this test")
+    confidence: Literal["high", "medium", "low"] = Field(..., description="Relevance confidence")
+    selection_rationale: str = Field(..., description="Why this test was chosen based on evidence")
+    kind: Literal["verified", "candidate"] = Field(default="candidate")
+    target_module: Optional[str] = Field(default=None)
+    evidence: IntelligenceEvidence
+
+
+class TestExecutionPlan(BaseModel):
+    """Strictly allowlisted test execution plan to be authorized by contributor."""
+
+    __test__ = False
+    test_runner: str = Field(..., description="Test runner identifier (e.g. pytest, vitest)")
+    command: str = Field(..., description="Allowlisted execution command")
+    arguments: list[str] = Field(default_factory=list, description="Structured arguments to pass")
+    working_dir: str = Field(default=".")
+    timeout_seconds: int = Field(default=30, ge=5, le=120)
+    is_allowlisted: bool = Field(default=True)
+    disclaimer: str = Field(
+        default="Execution runs in an isolated, network-disabled Docker container with dropped capabilities."
+    )
+
+
+class TestExecutionResult(BaseModel):
+    """Deterministic result of an isolated test execution."""
+
+    __test__ = False
+    status: Literal[
+        "passed",
+        "failed",
+        "timed_out",
+        "execution_unavailable",
+        "invalid_or_unsupported",
+        "error",
+    ]
+    runner: str
+    command: str
+    duration_seconds: float = Field(default=0.0, ge=0.0)
+    exit_code: Optional[int] = Field(default=None)
+    tests_total: Optional[int] = Field(default=None)
+    tests_passed: Optional[int] = Field(default=None)
+    tests_failed: Optional[int] = Field(default=None)
+    tests_skipped: Optional[int] = Field(default=None)
+    stdout_bounded: str = Field(default="")
+    stderr_bounded: str = Field(default="")
+    failure_details: list[str] = Field(default_factory=list)
+    failure_locations: list[str] = Field(default_factory=list)
+    ai_likely_causes: list[str] = Field(default_factory=list, description="AI explanations clearly labeled as inference")
+    ai_suggested_next_steps: list[str] = Field(default_factory=list, description="AI investigation suggestions")
+    simulated: bool = Field(default=False, description="True if executed in fixture/demo mode")
+    executed_at: str = Field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
+
+
+class ReviewFinding(BaseModel):
+    """Evidence-grounded code review finding from diff analysis."""
+
+    finding_id: str = Field(..., description="Stable identifier (e.g. 'finding-1')")
+    severity: Literal["critical", "high", "medium", "low", "informational"]
+    category: Literal[
+        "logic_error",
+        "edge_case",
+        "error_handling",
+        "input_validation",
+        "security",
+        "resource_management",
+        "regression",
+        "test_coverage",
+        "other",
+    ]
+    title: str = Field(..., description="Concise finding headline")
+    explanation: str = Field(..., description="Detailed explanation of potential issue")
+    evidence: str = Field(..., description="Excerpt or citation from the diff")
+    file_path: str = Field(..., description="Target file path")
+    line_range: Optional[str] = Field(default=None, description="Line number or range (e.g. '42-45')")
+    why_it_matters: str = Field(..., description="Impact of leaving this unaddressed")
+    suggested_action: str = Field(..., description="Actionable suggestion for contributor")
+    confidence: Literal["high", "medium", "low"]
+
+
+class RegressionRisk(BaseModel):
+    """Identified regression risk to existing repository modules."""
+
+    affected_module_or_file: str = Field(..., description="Module or component at risk")
+    risk_type: Literal["directly_affected", "potentially_affected", "unknown"]
+    evidence: str = Field(..., description="Evidence connecting change to risk")
+    potential_impact: str = Field(..., description="What could break if regression occurs")
+    suggested_verification: str = Field(..., description="How contributor can verify safety")
+    confidence: Literal["high", "medium", "low"]
+
+
+class ReadinessAssessment(BaseModel):
+    """Transparent assessment of whether diff is ready for maintainer review."""
+
+    status: Literal["ready_for_review", "needs_attention", "insufficient_evidence"]
+    summary: str = Field(..., description="Clear rationale explaining the status")
+    outstanding_items: list[str] = Field(default_factory=list, description="Items that require contributor attention")
+    checklist_status: dict[str, bool] = Field(default_factory=dict, description="Status of required contributor checks")
+
+
+class DraftPR(BaseModel):
+    """Maintainer-ready draft PR package built strictly from verified context."""
+
+    title: str = Field(..., description="Suggested pull request title following project conventions")
+    summary_of_changes: str = Field(..., description="Executive summary of modifications")
+    problem_addressed: str = Field(..., description="Issue context and problem resolved")
+    implementation_overview: str = Field(..., description="Description of changes made")
+    tests_performed: dict[str, list[str]] = Field(
+        default_factory=dict,
+        description="Structured test results (executed_passed, executed_failed, not_executed, manually_verified)",
+    )
+    known_limitations: list[str] = Field(default_factory=list, description="Known boundary conditions or out-of-scope items")
+    remaining_concerns: list[str] = Field(default_factory=list, description="Questions or open items for maintainer")
+    manual_verification_checklist: list[str] = Field(default_factory=list, description="Final contributor verification checklist")
+
+
+class VerificationAnalysisReport(BaseModel):
+    """Complete response for POST /api/verification/analyze (M4 VERIFY & CONTRIBUTE Pillar)."""
+
+    issue_number: int
+    issue_title: str
+    repo_url: str
+    parsed_diff: ParsedDiff
+    roadmap_alignment_summary: str = Field(..., description="How well changes align with M3 implementation roadmap")
+    potentially_unrelated_files: list[str] = Field(default_factory=list)
+    discovered_tests: list[DiscoveredTest] = Field(default_factory=list)
+    suggested_execution_plan: Optional[TestExecutionPlan] = None
+    review_findings: list[ReviewFinding] = Field(default_factory=list)
+    regression_risks: list[RegressionRisk] = Field(default_factory=list)
+    readiness: ReadinessAssessment
+    ai_status: Literal["complete", "unavailable_or_invalid"]
+    warnings: list[str] = Field(default_factory=list)
+    evidence: IntelligenceEvidence
+    checked_at: str = Field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
+
+
+class VerificationAnalyzeRequest(BaseModel):
+    """Request schema for POST /api/verification/analyze."""
+
+    repo_url: str = Field(..., description="Canonical GitHub repo URL (https://github.com/OWNER/REPO)")
+    issue_number: int = Field(..., description="GitHub issue number")
+    diff_text: str = Field(..., description="Contributor git diff text")
+    profile: Optional[ContributorProfile] = Field(default=None)
+    provider: Optional[str] = Field(default=None)
+    demo: Optional[bool] = Field(default=False)
+
+
+class VerificationExecuteRequest(BaseModel):
+    """Request schema for POST /api/verification/execute."""
+
+    repo_url: str = Field(..., description="Canonical GitHub repo URL (https://github.com/OWNER/REPO)")
+    issue_number: int = Field(..., description="GitHub issue number")
+    execution_plan: TestExecutionPlan = Field(..., description="Validated execution plan")
+    diff_text: Optional[str] = Field(default="", description="Optional diff text for isolated workspace patching")
+    authorized: bool = Field(..., description="Explicit contributor authorization to run isolated test container")
+    demo: Optional[bool] = Field(default=False)
+
+
+class VerificationPreparePRRequest(BaseModel):
+    """Request schema for POST /api/verification/prepare-pr."""
+
+    repo_url: str = Field(..., description="Canonical GitHub repo URL (https://github.com/OWNER/REPO)")
+    issue_number: int = Field(..., description="GitHub issue number")
+    diff_text: str = Field(..., description="Contributor git diff text")
+    profile: Optional[ContributorProfile] = Field(default=None)
+    execution_result: Optional[TestExecutionResult] = Field(default=None)
+    review_findings: list[ReviewFinding] = Field(default_factory=list)
+    regression_risks: list[RegressionRisk] = Field(default_factory=list)
+    readiness: Optional[ReadinessAssessment] = Field(default=None)
+    provider: Optional[str] = Field(default=None)
+    demo: Optional[bool] = Field(default=False)
+
+
+
 # Resolve forward references
 CandidateIssue.model_rebuild()

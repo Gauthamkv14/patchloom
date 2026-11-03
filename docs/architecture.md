@@ -255,7 +255,78 @@ The **Guided Implementation Engine** ([`guided_implementation.py`](file:///c:/Us
 
 ---
 
-## 8. Realistic 100× Scaling Discussion (Future Work)
+## 8. Verification & Review Architecture (Pillar 4 - VERIFY & CONTRIBUTE)
+
+Milestone 4 extends PatchLoom to help contributors validate their implementations, understand test results, review diffs for regressions, and prepare pull requests for maintainers.
+
+```mermaid
+flowchart TD
+    DiffInput["Contributor Git Diff (<=100KB)"] --> DiffParser["Deterministic Diff Parser (diff_analyzer.py)"]
+    
+    DiffParser -->|Parsed Files, Symbols & Lines| Alignment["Roadmap Step Alignment & Unrelated Files Check"]
+    DiffParser -->|Touched Target Paths| Discovery["Relevant Test Discovery (test_discovery.py)"]
+    
+    Discovery -->|Matched Counterpart Tests| Plan["Allowlisted Test Execution Plan"]
+    
+    Plan --> UserAuth{"Contributor Explicit Authorization (authorized=True)?"}
+    UserAuth -->|No| RejectAuth["Reject: invalid_or_unsupported"]
+    UserAuth -->|Yes| DockerCheck{"Docker Daemon Available?"}
+    DockerCheck -->|No| SafeUnavailable["Status: execution_unavailable (Zero Host Execution)"]
+    DockerCheck -->|Yes| Container["Disposable Docker Boundary (--network none, --cap-drop ALL, 512MB, 1.0 CPU)"]
+    
+    Container --> ExecResult["Bounded Test Execution Result (Passed / Failed / Timed Out)"]
+    
+    DiffParser --> Engine["Verification Orchestration Engine (verification.py)"]
+    ExecResult --> Engine
+    
+    Engine --> GemmaReview["Gemma 4 Diff Review & Regression Analysis"]
+    GemmaReview --> PathGrounding["Strict Path Grounding (Drop Nonexistent Paths)"]
+    PathGrounding --> Report["VerificationAnalysisReport (Findings, Risks, Readiness)"]
+    
+    Report --> DraftPR["Maintainer-Ready Draft PR Generator (generate_draft_pr)"]
+```
+
+### Key Verification Subsystems
+
+1. **Deterministic Unified Diff Parser (`diff_analyzer.py`):**
+   - Bounds input diff payload to 100KB with clean truncation warnings.
+   - Normalizes `a/` and `b/` prefixes and handles `/dev/null` for newly added or deleted files.
+   - Extracts file-level metrics (lines added/removed, change types) and detected function/class symbols via AST/regex patterns.
+   - Cross-references touched files against planned M3 implementation steps to detect potentially unrelated changes.
+
+2. **Repository-Grounded Test Discovery (`test_discovery.py`):**
+   - Matches counterpart naming conventions (`test_<module>.py`, `<module>_test.py`, `<module>.test.ts`).
+   - Inspects repository test directories and roadmap step test files.
+   - Identifies test runners (`pytest`, `vitest`, `jest`, `cargo`, `go test`) and formats structured, allowlisted commands.
+
+3. **Isolated Test Execution Boundary (`test_runner.py`):**
+   - Enforces 15 non-negotiable container isolation safeguards:
+     - Disposable execution with `--rm`.
+     - Complete network disablement with `--network none`.
+     - Dropped capabilities with `--cap-drop ALL`.
+     - Read-only root filesystem with temporary bounded tmpfs.
+     - Non-root user execution (`--user 10001:10001`).
+     - Bounded compute: `--cpus=1.0`, `--memory=512m`, `--pids-limit=64`.
+     - Strict 30-second execution timeout.
+     - Command allowlist verification rejecting shell operators (`;`, `&`, `|`, `` ` ``, `$()`, `>`, `<`).
+     - Explicit contributor authorization (`authorized=True`) required for all container invocations.
+     - Host Isolation Invariant: Tests are never run on the host system. When Docker is offline, returns `execution_unavailable` cleanly.
+     - Bounded stdout/stderr capture (32KB max) and regex parsing of test pass/fail counts.
+
+4. **AI-Assisted Grounded Diff Review (`verification.py`):**
+   - Reviews diffs against issue requirements and repository intelligence for logic errors, edge cases, error handling, security, and test coverage.
+   - Assesses potential regression risks across directly affected, potentially affected, and unknown modules.
+   - Strict Grounding Invariant: Hallucinated paths not present in the repository tree or diff are strictly dropped.
+   - Implements 1 automatic retry on schema invalidity and complete deterministic fallback on model unavailability.
+
+5. **Maintainer-Ready Draft PR Generator (`generate_draft_pr`):**
+   - Accurately classifies tests performed into `executed_and_passed`, `executed_and_failed`, `not_executed`, and `manually_verified`.
+   - Synthesizes clear PR title, summary, problem addressed, implementation overview, and manual verification checklist.
+   - PRs remain pure client-side draft proposals. PatchLoom never opens PRs, creates branches, or commits code.
+
+---
+
+## 9. Realistic 100× Scaling Discussion (Future Work)
 
 At 100× active users or high concurrent traffic, PatchLoom's architecture would encounter specific upstream bottlenecks. Below is an honest engineering analysis of these limits and the planned future architecture:
 

@@ -382,3 +382,123 @@ export interface GuidedImplementationPlan {
   checked_at: string;
 }
 
+export interface DiffChangeFile {
+  path: string;
+  old_path?: string | null;
+  change_type: 'added' | 'modified' | 'deleted';
+  lines_added: number;
+  lines_removed: number;
+  detected_symbols: string[];
+}
+
+export interface ParsedDiff {
+  files: DiffChangeFile[];
+  total_files: number;
+  lines_added: number;
+  lines_removed: number;
+  raw_diff_sample?: string;
+  is_truncated: boolean;
+  warnings: string[];
+}
+
+export interface DiscoveredTest {
+  test_file: string;
+  framework: string;
+  test_command: string;
+  confidence: 'high' | 'medium' | 'low';
+  selection_rationale: string;
+  kind: 'counterpart_test' | 'module_test' | 'roadmap_step_test' | 'profile_test' | 'candidate';
+  target_module?: string | null;
+  evidence: IntelligenceEvidence;
+}
+
+export interface TestExecutionPlan {
+  test_runner: string;
+  command: string;
+  arguments: string[];
+  working_dir: string;
+  timeout_seconds: number;
+  is_allowlisted: boolean;
+  disclaimer: string;
+}
+
+export interface TestExecutionResult {
+  status: 'passed' | 'failed' | 'timed_out' | 'execution_unavailable' | 'invalid_or_unsupported' | 'error';
+  runner: string;
+  command: string;
+  duration_seconds: number;
+  exit_code: number;
+  tests_total?: number | null;
+  tests_passed?: number | null;
+  tests_failed?: number | null;
+  tests_skipped?: number | null;
+  stdout_bounded: string;
+  stderr_bounded: string;
+  failure_details: string[];
+  failure_locations: string[];
+  ai_likely_causes: string[];
+  ai_suggested_next_steps: string[];
+  simulated: boolean;
+  executed_at: string;
+}
+
+export interface ReviewFinding {
+  finding_id: string;
+  severity: 'critical' | 'high' | 'medium' | 'low' | 'informational';
+  category: 'logic_error' | 'edge_case' | 'error_handling' | 'input_validation' | 'security' | 'resource_management' | 'regression' | 'test_coverage' | 'other';
+  title: string;
+  explanation: string;
+  evidence: string;
+  file_path: string;
+  line_range?: string | null;
+  why_it_matters: string;
+  suggested_action: string;
+  confidence: 'high' | 'medium' | 'low';
+}
+
+export interface RegressionRisk {
+  risk_id: string;
+  affected_module_or_file: string;
+  risk_type: 'directly_affected' | 'potentially_affected' | 'unknown';
+  evidence: string;
+  potential_impact: string;
+  suggested_verification: string;
+  confidence: 'high' | 'medium' | 'low';
+}
+
+export interface ReadinessAssessment {
+  status: 'ready_for_review' | 'needs_attention' | 'insufficient_evidence';
+  summary: string;
+  outstanding_items: string[];
+  checklist_status: Record<string, boolean>;
+}
+
+export interface DraftPR {
+  title: string;
+  summary_of_changes: string;
+  problem_addressed: string;
+  implementation_overview: string;
+  tests_performed: Record<string, string[]>;
+  known_limitations: string[];
+  remaining_concerns: string[];
+  manual_verification_checklist: string[];
+}
+
+export interface VerificationAnalysisReport {
+  issue_number: number;
+  issue_title: string;
+  repo_url: string;
+  parsed_diff: ParsedDiff;
+  roadmap_alignment_summary: string;
+  potentially_unrelated_files: string[];
+  discovered_tests: DiscoveredTest[];
+  suggested_execution_plan?: TestExecutionPlan | null;
+  review_findings: ReviewFinding[];
+  regression_risks: RegressionRisk[];
+  readiness: ReadinessAssessment;
+  ai_status: 'complete' | 'unavailable_or_invalid';
+  warnings: string[];
+  evidence: IntelligenceEvidence;
+  checked_at: string;
+}
+

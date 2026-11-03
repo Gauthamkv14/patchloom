@@ -22,11 +22,11 @@ PatchLoom bridges the gap between wanting to contribute and opening your first P
 1. **DISCOVER — Viability Signals & Contributor Fit:** Ingests live repository metadata and computes an objective viability score (0–100) assessing issue staleness, assignment status, linked PR evidence, and reproduction quality. Evaluates pre-filtered candidate issues against the contributor's skills, experience level, and available hours using `models/gemma-4-31b-it`.
 2. **UNDERSTAND — Deterministic Repository Intelligence:** Analyzes repository architecture, programming languages, technologies, package manifests, key application entry points, test profiles, documentation, and logical modules without requiring AI model calls. Deterministically maps issues to components and grounded file targets.
 3. **LEARN & BUILD — Intelligent Issue Learning & Guided Implementation:** For any chosen issue, generates a personalized Issue Learning Brief and an interactive Guided Implementation Workspace with ordered roadmap steps, a 3-tier progressive hint system (gentle direction -> specific investigation -> technical guidance), code exploration guidance, alternative implementation approaches with trade-offs, self-reflection checkpoints, and optional educational code suggestions.
-4. **VERIFY & CONTRIBUTE — Grounded First-PR Planner:** Generates an actionable, step-by-step contribution plan (3–7 steps) for a chosen issue, complete with setup verification, test commands, a draft PR title, and a maintainer-ready PR description draft.
+4. **VERIFY & CONTRIBUTE — Verification, Isolated Test Boundary & PR Preparation:** Analyzes contributor git diffs (up to 100KB) with roadmap step alignment and symbol detection. Discovers candidate tests, executes them in disposable, network-isolated Docker containers (`--network none`, `--cap-drop ALL`, 512MB RAM, 1.0 CPU) upon explicit contributor authorization, assesses potential regression risks, and generates maintainer-ready draft PR descriptions.
 
 ### What PatchLoom Does and Does Not Do
-- **What it does:** Recommends a ranked shortlist of plausible issues (up to 12), explains why each matches your skills and time budget, generates personalized issue learning briefs with grounded file targets, provides interactive guided implementation roadmaps with progressive hints, rigorously separates verified facts from AI inferences, and produces a grounded PR plan.
-- **What it does NOT do:** PatchLoom does **not** create accounts or databases, does **not** modify GitHub repositories, does **not** create branches or open automated PRs, does **not** clone repositories or execute arbitrary code, and does **not** hallucinate non-existent files.
+- **What it does:** Recommends a ranked shortlist of plausible issues (up to 12), explains why each matches your skills and time budget, generates personalized issue learning briefs with grounded file targets, provides interactive guided implementation roadmaps with progressive hints, analyzes contributor diffs for roadmap alignment and regression risks, discovers and safely runs relevant tests in disposable Docker boundaries, and prepares maintainer-ready PR drafts.
+- **What it does NOT do:** PatchLoom does **not** create accounts or databases, does **not** modify GitHub repositories, does **not** create branches or open automated PRs, does **not** execute arbitrary code on host machines, and does **not** hallucinate non-existent files.
 
 ---
 
@@ -53,6 +53,8 @@ PatchLoom uses bounded model interactions:
 2. **Issue Learning Brief:** Exactly **1 model call** produces a personalized educational learning brief for a selected issue (with zero code generation, strict tree grounding, and deterministic fallback on AI quota/outage).
 3. **Guided Implementation Workspace:** Exactly **1 model call** produces a personalized, evidence-grounded implementation roadmap with progressive hints, exploration targets, and alternative approaches.
 4. **First-PR Plan Generation:** Exactly **1 model call** produces a sequenced 3-7 step roadmap for a selected issue.
+5. **Diff Review & Regression Analysis:** Exactly **1 model call** (with 1 retry on malformed JSON) analyzes contributor diffs for logic errors, edge cases, and regression risks, strictly dropping ungrounded paths.
+6. **Maintainer Draft PR Generator:** Exactly **1 model call** (or deterministic synthesis) packages verified changes and test outcomes into a maintainer-ready PR description.
 
 ### Verification, Grounding & Safety Invariants
 - **Strict Repository Path Grounding:** Gemma 4 is provided with the repository file tree (up to 400 paths). Every file path suggested in `likely_files` or contribution steps is checked against the actual repository tree; hallucinated paths are dropped.

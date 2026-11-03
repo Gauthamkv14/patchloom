@@ -21,6 +21,7 @@ from app.rate_limit import rate_limit
 from app.schemas import (
     AnalyzeRequest,
     AnalyzeResponse,
+    DraftPR,
     GuidedImplementationPlan,
     GuidedImplementationRequest,
     HealthResponse,
@@ -30,7 +31,14 @@ from app.schemas import (
     PlanRequest,
     PlanResponse,
     RepositoryIntelligenceReport,
+    TestExecutionResult,
+    VerificationAnalysisReport,
+    VerificationAnalyzeRequest,
+    VerificationExecuteRequest,
+    VerificationPreparePRRequest,
 )
+from app.test_runner import execute_isolated_test_plan
+from app.verification import generate_draft_pr, generate_verification_analysis
 
 router = APIRouter(prefix="/api")
 
@@ -295,6 +303,99 @@ async def generate_guided_implementation_endpoint(request: GuidedImplementationR
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="GitHub API upstream service error. Please try again later.",
         ) from exc
+    except Exception as exc:
+        request_id = str(uuid.uuid4())
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected internal error occurred (Request ID: {request_id})",
+        ) from exc
+
+
+@router.post(
+    "/verification/analyze",
+    response_model=VerificationAnalysisReport,
+    dependencies=[Depends(rate_limit("verification_analyze", lambda: settings.VERIFICATION_ANALYZE_RATE_LIMIT))],
+)
+async def analyze_verification_endpoint(request: VerificationAnalyzeRequest) -> VerificationAnalysisReport:
+    """Analyze contributor git diff, discover candidate tests, and generate evidence-grounded review."""
+    try:
+        return await generate_verification_analysis(
+            repo_url=request.repo_url,
+            issue_number=request.issue_number,
+            diff_text=request.diff_text,
+            profile=request.profile,
+            provider_name=request.provider,
+            demo=request.demo or False,
+        )
+    except (InvalidGitHubURLError, UnsupportedProviderError) as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except IssueClosedError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except (RepoNotFoundError, IssueNotFoundError) as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except RepoAccessError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except RateLimitExceededError as exc:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=str(exc)) from exc
+    except GitHubUpstreamError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="GitHub API upstream service error. Please try again later.",
+        ) from exc
+    except Exception as exc:
+        request_id = str(uuid.uuid4())
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected internal error occurred (Request ID: {request_id})",
+        ) from exc
+
+
+@router.post(
+    "/verification/execute",
+    response_model=TestExecutionResult,
+    dependencies=[Depends(rate_limit("verification_execute", lambda: settings.VERIFICATION_EXECUTE_RATE_LIMIT))],
+)
+async def execute_verification_endpoint(request: VerificationExecuteRequest) -> TestExecutionResult:
+    """Execute an authorized test plan inside an isolated, disposable Docker container."""
+    try:
+        return await execute_isolated_test_plan(
+            plan=request.execution_plan,
+            diff_text=request.diff_text,
+            authorized=request.authorized,
+            demo=request.demo or False,
+        )
+    except Exception as exc:
+        request_id = str(uuid.uuid4())
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred during test execution (Request ID: {request_id})",
+        ) from exc
+
+
+@router.post(
+    "/verification/prepare-pr",
+    response_model=DraftPR,
+    dependencies=[Depends(rate_limit("verification_prepare_pr", lambda: settings.VERIFICATION_PREPARE_PR_RATE_LIMIT))],
+)
+async def prepare_pr_endpoint(request: VerificationPreparePRRequest) -> DraftPR:
+    """Generate maintainer-ready draft PR description built strictly from verified context."""
+    try:
+        return await generate_draft_pr(
+            repo_url=request.repo_url,
+            issue_number=request.issue_number,
+            diff_text=request.diff_text,
+            profile=request.profile,
+            execution_result=request.execution_result,
+            review_findings=request.review_findings,
+            regression_risks=request.regression_risks,
+            readiness=request.readiness,
+            provider_name=request.provider,
+            demo=request.demo or False,
+        )
+    except (InvalidGitHubURLError, UnsupportedProviderError) as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except (RepoNotFoundError, IssueNotFoundError) as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except Exception as exc:
         request_id = str(uuid.uuid4())
         raise HTTPException(

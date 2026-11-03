@@ -1,9 +1,9 @@
 # PROGRESS.md — PatchLoom Execution Log & Milestone Tracker
 
 ## Current Status
-- **Current Milestone:** M3 2.0 Guided Implementation — Complete & Verified
-- **Authorized Gate:** M3 2.0 Guided Implementation (LEARN & BUILD Pillar)
-- **Milestone Scope Complete:** P0 Core (M0–M7) + P1 Hardening (M8) + Deployment Readiness + M0 Audit + M0.1 Cleanup + M1 2.0 Intelligence Layer + M2 2.0 Issue Learning + M3 2.0 Guided Implementation
+- **Current Milestone:** M4 2.0 Verification & Review — Complete & Verified
+- **Authorized Gate:** M4 2.0 Verification & Review (VERIFY & CONTRIBUTE Pillar)
+- **Milestone Scope Complete:** P0 Core (M0–M7) + P1 Hardening (M8) + Deployment Readiness + M0 Audit + M0.1 Cleanup + M1 2.0 Intelligence Layer + M2 2.0 Issue Learning + M3 2.0 Guided Implementation + M4 2.0 Verification & Review
 - **Blocked on:** Gate Approval for Next Milestone / Review
 
 ---
@@ -28,6 +28,7 @@
 | **M1 2.0** | Repository Intelligence Layer | 2.0 | Complete | Deterministic intelligence engine, overview, entrypoints, test & CI, docs, modules, issue-mapping, 110 tests passing |
 | **M2 2.0** | Intelligent Issue Learning | 2.0 | Complete | Personalized Issue Learning Briefs, requirements extraction, grounded investigation targets, technical concepts & sequencing, measurable objectives, interactive readiness checklist, 122 tests passing |
 | **M3 2.0** | Guided Implementation Workspace | 2.0 | Complete | Implementation roadmaps, 3-tier progressive hint system, code exploration guidance, alternative approaches with trade-offs, step checkpoints, optional educational patch suggestions, 130 tests passing |
+| **M4 2.0** | Verification & Review | 2.0 | Complete | Deterministic diff analyzer (100KB), relevant test discovery, isolated Docker runner boundary, AI diff review & retry, regression analysis, readiness assessment, maintainer draft PR generation, 150 tests passing |
 | **M9** | Ollama Provider & Evaluation | P2 | Not Started | Stretch (P2) |
 | **M10** | Render Deployment | P3 | Not Started | Contingent / Optional (P3) |
 
@@ -48,6 +49,7 @@
 11. **Deterministic Repository Intelligence Engine (Pillar 2 - UNDERSTAND):** The M1 engine is 100% deterministic, operating without requiring AI model inference, credentials, cloning, shell execution, or external network dependencies beyond standard public GitHub tree/metadata fetching. Testing infrastructure is strictly modeled as `detected`, `not_detected` (only when the tree is complete), or `unknown` (when truncated or incomplete). Every insight tracks evidence provenance (`status`, `source`, `observed_at`). Issue-to-module mapping strictly retains grounded files present in the ingested tree. Plain text rendering in React JSX with zero `dangerouslySetInnerHTML`.
 12. **Intelligent Issue Learning Engine (Pillar 3 - LEARN):** M2 introduces personalized Issue Learning Briefs that prioritize educational understanding and contributor independence over code generation. File targets in `investigation_targets` must strictly exist in the ingested repository tree; ungrounded paths are dropped. When AI inference fails, times out, or exceeds quota, a deterministic fallback brief is generated preserving all issue facts and M1 repository intelligence, with honest `ai_status="unavailable_or_invalid"`. Untrusted issue descriptions and comments are bounded and defensively sanitized. Plain text JSX rendering with interactive self-assessment readiness checklist.
 13. **Guided Implementation Engine (Pillars 3 & 4 - LEARN & BUILD):** M3 delivers an interactive, evidence-grounded guided implementation workspace. Steps are grounded in verified repository files, with hallucinated paths strictly dropped. Up to 3 progressive hints per step reduce ambiguity gradually upon explicit user reveal without spoiling the solution prematurely. Implementation approaches contrast viable trade-offs, edge cases, and regression risks. Optional code suggestions are strictly labeled `unverified_educational_draft` and never executed, applied, or committed. Contributor controls their step progress (`not_started`, `in_progress`, `understood`, `completed`); AI never auto-completes steps.
+14. **Verification & Review Architecture & Isolated Test Boundary (Pillar 4 - VERIFY & CONTRIBUTE):** M4 introduces comprehensive change validation and contribution review. Contributor git diffs are deterministically parsed and bounded (max 100KB), with roadmap alignment cross-referencing and symbol detection. Relevant tests are discovered from file counterpart patterns, test directories, and roadmap targets. Test execution occurs strictly in disposable, network-disabled Docker containers with dropped capabilities (`--cap-drop ALL`), non-root execution, bounded CPU/memory, and explicit contributor authorization (`authorized=True`). Host execution is strictly forbidden; if Docker daemon is offline, the runner safely reports `execution_unavailable`. AI review findings and regression risks are grounded strictly against ingested repository paths with hallucinated files dropped. Draft PR descriptions are generated strictly from verified context and categorized test results.
 
 ---
 
@@ -140,13 +142,17 @@
   - Added automatic prompt-mode fallback to `GeminiProvider._call_model` on schema errors (`ValueError: additionalProperties`) and server-side 500 crashes.
   - Ensured `_fallback_prompt_mode` omits `response_mime_type="application/json"` to bypass the unstable Gemini API Gemma proxy.
   - Enhanced `_parse_and_validate` with regex block extraction to reliably extract JSON from markdown fences or surrounding model commentary.
-- **PatchLoom 2.0 M0.1 Architectural Cleanup (2026-10-31):**
-  - **Provider Routing Completed:** Implemented `get_provider(provider_name)` in `app/providers/__init__.py`. Routes cleanly to `GeminiProvider` by default or settings, validates early in `analysis.py` and `planner.py`, and maps `UnsupportedProviderError` to HTTP 400 Bad Request in `api.py`. Analysis and planning orchestration type-hint against abstract `ModelProvider`.
-  - **CI Metadata (`has_ci`) Implemented with Provenance:** Implemented `detect_ci` and `evaluate_ci_presence_from_paths` in `app/github_client.py` detecting common CI configurations (GitHub Actions, Travis, CircleCI, GitLab CI, Azure Pipelines, AppVeyor, Jenkins, Buildkite, Bitbucket Pipelines). Respects 5MB payload limits, caches tree results, and strictly marks truncated/uninspected trees as `has_ci=None` and `status="unknown"`, never reporting absent.
-  - **Scratch Files Cleaned:** Removed temporary experiment `scratch/test_model_capability.py`. Preserved reusable tests `scratch/rehearse_demo.py` and `scratch/smoke_test_gemini.py`. Confirmed `.gitignore` excludes `scratch/`.
-  - **Dependency Range Pinned:** Pinned `google-genai>=2.31.0,<3.0.0` in `backend/requirements.txt` based on the actively verified installed version (2.31.0).
-  - **Test Suite Verification:** 95 passed in 6.28s (`pytest backend/tests/ -v`). Added 3 provider routing tests and 5 focused CI detection tests (`test_detect_ci_detected`, `test_detect_ci_not_detected_complete_tree`, `test_detect_ci_unknown_when_tree_truncated`, `test_detect_ci_unknown_when_api_fails`, `test_detect_ci_unknown_when_payload_exceeds_cap`), plus 1 API 400 unsupported provider test.
-  - **Frontend Build Verified:** `tsc && vite build` compiled and packaged cleanly in 620ms (zero TypeScript errors).
+- **PatchLoom 2.0 M4 Verification & Review (2026-11-03):**
+  - **Deterministic Unified Diff Parser (`diff_analyzer.py`):** Parses unified git diffs up to 100KB, extracts touched files, added/removed line metrics, detected function/class symbols, and cross-references touched files against M3 implementation roadmap steps to highlight potentially unrelated scope.
+  - **Relevant Test Discovery (`test_discovery.py`):** Discovers relevant tests using file counterpart conventions (`test_<module>.py`, `<module>_test.py`), test directory discovery, and roadmap step matching. Detects test framework (`pytest`, `vitest`, `jest`, `cargo`, `go`) and synthesizes allowlisted command arguments.
+  - **Isolated Docker Test Boundary (`test_runner.py`):** Implements all 15 container safeguards: `--network none`, `--cap-drop ALL`, CPU limits (1.0 core), memory limits (512MB), PID limits (64), read-only mounts, disposable container life-cycle, and explicit contributor authorization (`authorized=True`). Probes Docker daemon safely and returns `execution_unavailable` when offline without executing on the host. Allowlist rejects shell metacharacters and unapproved runners.
+  - **Verification Orchestration & Fallback Engine (`verification.py`):** Evaluates diff against repository intelligence and roadmap targets using Gemma 4. Implements 1 automatic retry on `InvalidModelOutputError`, strict repository file path grounding (dropping invented files), and robust deterministic fallback with explicit provenance.
+  - **Draft PR Generator (`generate_draft_pr`):** Produces maintainer-ready PR descriptions with summary of changes, problem addressed, implementation overview, categorized tests performed (`executed_and_passed`, `executed_and_failed`, `not_executed`, `manually_verified`), known limitations, and maintainer checklist. PRs are drafts only; no GitHub write or branch creation is performed.
+  - **API Endpoints Registered (`api.py`):** `POST /api/verification/analyze` (rate-limited 10/10m), `POST /api/verification/execute` (rate-limited 5/10m), `POST /api/verification/prepare-pr` (rate-limited 10/10m). Request body size limit raised to 128KB in `config.py` to support 100KB diff payloads.
+  - **Test Suite Verification:** 150 passed in 6.92s (`pytest backend/tests/ -v`). Added 20 comprehensive unit tests in `test_verification.py`.
+  - **Frontend Verification Workspace:** Created `VerificationModal.tsx` with Diff & Changes viewer, Tests & Isolated Runner panel, Review Findings grouped by severity, Regression & Readiness assessment, and Draft PR viewer with copy actions. Integrated into `IssueCard` and `GuidedImplementationModal`. Production build passed in 743ms (`npm run build --prefix frontend`).
+  - **Demo Rehearsal Verified:** Updated `scratch/rehearse_demo.py` with Step 3d covering analyze, execute, and prepare-pr. Full rehearsal passed with zero errors.
+
 
 
 

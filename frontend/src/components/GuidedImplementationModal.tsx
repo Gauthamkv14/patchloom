@@ -7,6 +7,7 @@ import {
 interface GuidedImplementationModalProps {
   plan: GuidedImplementationPlan;
   onClose: () => void;
+  onOpenVerification?: (issueNumber: number) => void;
 }
 
 type StepStatus = 'not_started' | 'in_progress' | 'understood' | 'completed';
@@ -14,6 +15,7 @@ type StepStatus = 'not_started' | 'in_progress' | 'understood' | 'completed';
 export const GuidedImplementationModal: React.FC<GuidedImplementationModalProps> = ({
   plan,
   onClose,
+  onOpenVerification,
 }) => {
   const [activeTab, setActiveTab] = useState<'steps' | 'approaches' | 'exploration'>('steps');
   const [activeStepIndex, setActiveStepIndex] = useState<number>(0);
@@ -600,6 +602,16 @@ export const GuidedImplementationModal: React.FC<GuidedImplementationModalProps>
           <button type="button" className="btn-secondary" onClick={copyRoadmapSummary}>
             {copiedText ? '✓ Copied Roadmap Summary' : '📋 Copy Roadmap Summary'}
           </button>
+          {onOpenVerification && (
+            <button
+              type="button"
+              className="btn-accent"
+              onClick={() => onOpenVerification(plan.issue_number)}
+              style={{ fontWeight: 600, backgroundColor: '#059669', color: '#ffffff' }}
+            >
+              🔍 Proceed to Verification &amp; Review
+            </button>
+          )}
           <button type="button" className="btn-primary" onClick={onClose}>
             Done
           </button>

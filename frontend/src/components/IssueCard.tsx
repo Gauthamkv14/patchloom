@@ -10,6 +10,8 @@ interface IssueCardProps {
   isLearningThis?: boolean;
   onSelectGuided?: (issue: CandidateIssue) => void;
   isGuidingThis?: boolean;
+  onSelectVerify?: (issue: CandidateIssue) => void;
+  isVerifyingThis?: boolean;
 }
 
 export const IssueCard: React.FC<IssueCardProps> = ({
@@ -21,6 +23,8 @@ export const IssueCard: React.FC<IssueCardProps> = ({
   isLearningThis,
   onSelectGuided,
   isGuidingThis,
+  onSelectVerify,
+  isVerifyingThis,
 }) => {
   const [expanded, setExpanded] = useState(false);
 
@@ -116,6 +120,18 @@ export const IssueCard: React.FC<IssueCardProps> = ({
             style={{ fontWeight: 600, borderColor: '#2563eb', color: '#2563eb' }}
           >
             {isGuidingThis ? 'Generating Roadmap...' : '🚀 Guided Build'}
+          </button>
+        )}
+
+        {onSelectVerify && (
+          <button
+            type="button"
+            className="btn-secondary verify-btn"
+            onClick={() => onSelectVerify(issue)}
+            disabled={isVerifyingThis}
+            style={{ fontWeight: 600, borderColor: '#059669', color: '#059669' }}
+          >
+            {isVerifyingThis ? 'Analyzing Diff...' : '🔍 Verify Changes'}
           </button>
         )}
 

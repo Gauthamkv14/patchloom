@@ -30,6 +30,12 @@ from app.schemas import (
     RepoMetadata,
     SignalEvidence,
     StepCheckpoint,
+    VerificationAnalysisReport,
+    DraftPR,
+    TestExecutionResult,
+    ReviewFinding,
+    RegressionRisk,
+    ReadinessAssessment,
 )
 from app.repo_intelligence import (
     generate_repository_intelligence,
@@ -597,4 +603,117 @@ def load_fixture_guided_implementation(
     )
     plan.ai_status = "complete"
     return plan
+
+
+def load_fixture_verification(
+    repo_url: str,
+    issue_number: int,
+    profile: Optional[ContributorProfile] = None,
+    diff_text: str = "",
+    planned_steps: Optional[list[ImplementationStep]] = None,
+) -> VerificationAnalysisReport:
+    """Load an offline fixture verification analysis report with zero external network or model calls."""
+    data = get_fixture_data_for_url(repo_url)
+    reports = data.get("verification_reports", {})
+    report_data = reports.get(str(issue_number))
+
+    # If pre-saved snapshot exists and no custom diff was provided, return snapshot
+    if report_data and not diff_text.strip():
+        return VerificationAnalysisReport.model_validate(report_data)
+
+    # Otherwise, dynamically parse the diff and run deterministic fallback on fixture repo data
+    from app.diff_analyzer import parse_git_diff
+    from app.verification import create_deterministic_fallback_verification_report
+
+    parsed_diff = parse_git_diff(diff_text)
+    matched_issue = next((i for i in data.get("issues", []) if i["number"] == issue_number), None)
+    title = matched_issue["title"] if matched_issue else f"Issue #{issue_number}"
+    url = matched_issue.get("url") if matched_issue else f"{repo_url}/issues/{issue_number}"
+    body = matched_issue.get("body", "") if matched_issue else ""
+    tree = data.get("file_tree", [])
+    docs = data.get("docs", {})
+    repo_data = data.get("repo", {})
+
+    intel = generate_repository_intelligence(
+        owner=repo_data.get("owner", "org"),
+        repo_name=repo_data.get("name", "repo"),
+        languages=repo_data.get("languages", []),
+        file_tree=tree,
+        docs_metadata=docs,
+        candidate_issues=[{"number": issue_number, "title": title, "body": body, "labels": matched_issue.get("labels", []) if matched_issue else []}],
+        is_truncated=repo_data.get("tree_truncated", False),
+    )
+
+    rep = create_deterministic_fallback_verification_report(
+        issue_number=issue_number,
+        issue_title=title,
+        repo_url=url,
+        parsed_diff=parsed_diff,
+        file_tree=tree,
+        intelligence_report=intel,
+        planned_steps=planned_steps,
+        warning_reason="Demo/Fixture mode active. Showing validated offline snapshot verification report.",
+    )
+    rep.ai_status = "complete"
+    return rep
+
+
+def load_fixture_draft_pr(
+    repo_url: str,
+    issue_number: int,
+    diff_text: str = "",
+    execution_result: Optional[TestExecutionResult] = None,
+    review_findings: Optional[list[ReviewFinding]] = None,
+    regression_risks: Optional[list[RegressionRisk]] = None,
+    readiness: Optional[ReadinessAssessment] = None,
+) -> DraftPR:
+    """Load an offline fixture draft PR description with zero external network or model calls."""
+    data = get_fixture_data_for_url(repo_url)
+    drafts = data.get("draft_prs", {})
+    draft_data = drafts.get(str(issue_number))
+
+    if draft_data and not diff_text.strip():
+        return DraftPR.model_validate(draft_data)
+
+    from app.diff_analyzer import parse_git_diff
+
+    parsed_diff = parse_git_diff(diff_text)
+    matched_issue = next((i for i in data.get("issues", []) if i["number"] == issue_number), None)
+    title = matched_issue["title"] if matched_issue else f"Issue #{issue_number}"
+
+    tests_performed: dict[str, list[str]] = {
+        "executed_and_passed": [],
+        "executed_and_failed": [],
+        "not_executed": [],
+        "manually_verified": [],
+    }
+
+    if execution_result:
+        cmd_str = f"{execution_result.plan.command} {' '.join(execution_result.plan.arguments)}"
+        summary_entry = f"{cmd_str} -> {execution_result.status.value} (exit {execution_result.exit_code})"
+        if execution_result.status.value == "passed":
+            tests_performed["executed_and_passed"].append(summary_entry)
+        elif execution_result.status.value in ["failed", "timed_out"]:
+            tests_performed["executed_and_failed"].append(summary_entry)
+        else:
+            tests_performed["not_executed"].append(summary_entry)
+
+    files_summary = ", ".join(f.path for f in parsed_diff.files[:3])
+    if len(parsed_diff.files) > 3:
+        files_summary += f" and {len(parsed_diff.files) - 3} more"
+
+    return DraftPR(
+        title=f"fix: address issue #{issue_number} ({title[:50]})",
+        summary_of_changes=f"Addresses #{issue_number} by updating {len(parsed_diff.files)} file(s) (+{parsed_diff.lines_added}/-{parsed_diff.lines_removed}).",
+        problem_addressed=f"Resolves #{issue_number}: {title}",
+        implementation_overview=f"Touched: {files_summary or 'No files modified.'}",
+        tests_performed=tests_performed,
+        known_limitations=[],
+        remaining_concerns=[],
+        manual_verification_checklist=[
+            "Verify test suite passes locally",
+            "Ensure diff contains no accidental debug prints or formatting debt",
+            "Review updated documentation and comments",
+        ],
+    )
 
