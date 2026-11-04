@@ -5,21 +5,33 @@ interface LearnModalProps {
   brief: IssueLearningBrief;
   onClose: () => void;
   onStartGuidedImplementation?: (issueNumber: number) => void;
+  initialCheckedItems?: Record<string, boolean>;
+  onChecklistChange?: (checkedItems: Record<string, boolean>) => void;
 }
 
-export const LearnModal: React.FC<LearnModalProps> = ({ brief, onClose, onStartGuidedImplementation }) => {
+export const LearnModal: React.FC<LearnModalProps> = ({
+  brief,
+  onClose,
+  onStartGuidedImplementation,
+  initialCheckedItems,
+  onChecklistChange,
+}) => {
   const [activeTab, setActiveTab] = useState<'explanation' | 'codebase' | 'concepts' | 'checklist'>('explanation');
-  const [checkedItems, setCheckedItems] = useState<Record<string, boolean>>({});
+  const [checkedItems, setCheckedItems] = useState<Record<string, boolean>>(initialCheckedItems || {});
   const [copiedText, setCopiedText] = useState(false);
 
   // Reset checklist and active tab when switching issues
   useEffect(() => {
-    setCheckedItems({});
+    setCheckedItems(initialCheckedItems || {});
     setActiveTab('explanation');
-  }, [brief.issue_number]);
+  }, [brief.issue_number, initialCheckedItems]);
 
   const toggleCheck = (id: string) => {
-    setCheckedItems((prev) => ({ ...prev, [id]: !prev[id] }));
+    setCheckedItems((prev) => {
+      const next = { ...prev, [id]: !prev[id] };
+      onChecklistChange?.(next);
+      return next;
+    });
   };
 
   const totalChecklist = brief.readiness_checklist.length;

@@ -12,6 +12,8 @@ import {
   DraftPR,
   VerificationAnalysisReport,
 } from './types';
+import { learningHistoryStorage } from './storage/indexedDb';
+import type { StepStatus } from './types/learningHistory';
 import { InputForm } from './components/InputForm';
 import { EvidenceLegend } from './components/EvidenceLegend';
 import { IssueCard } from './components/IssueCard';
@@ -55,6 +57,86 @@ export default function App() {
   const [currentProfile, setCurrentProfile] = useState<ContributorProfile | null>(null);
   const [currentDemo, setCurrentDemo] = useState<boolean>(false);
 
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [activeChecklistState, setActiveChecklistState] = useState<Record<string, boolean>>({});
+  const [activeStepStatuses, setActiveStepStatuses] = useState<Record<string, StepStatus>>({});
+  const [activeRevealedHints, setActiveRevealedHints] = useState<Record<string, boolean>>({});
+  const [activeDiffText, setActiveDiffText] = useState<string>('');
+  const [optInStoreDiff, setOptInStoreDiff] = useState<boolean>(false);
+  const [quotaWarning, setQuotaWarning] = useState<string | null>(null);
+  const [storageMode, setStorageMode] = useState<'indexeddb' | 'memory'>('indexeddb');
+  const [storageWarning, setStorageWarning] = useState<string | null>(null);
+
+  const checkQuota = async () => {
+    try {
+      const q = await learningHistoryStorage.checkStorageQuota();
+      if (q.warning) {
+        setQuotaWarning(q.message || 'Storage soft limit reached');
+      } else {
+        setQuotaWarning(null);
+      }
+    } catch {
+      // Storage errors handled gracefully
+    }
+  };
+
+  const getOrCreateSession = async (
+    issueNumber: number,
+    issueTitle: string,
+    initialPillar: 'm2_learn' | 'm3_guided' | 'm4_verify',
+  ) => {
+    try {
+      let session = await learningHistoryStorage.findActiveSession(currentRepoUrl, issueNumber, currentDemo);
+      if (!session) {
+        session = await learningHistoryStorage.createSession({
+          repoUrl: currentRepoUrl,
+          issueNumber,
+          issueTitle,
+          isDemo: currentDemo,
+          profile: currentProfile,
+          initialPillar,
+        });
+      }
+      setCurrentSessionId(session.sessionId);
+
+      // Restore checklist / steps / hints from prior session if present
+      if (session.m2Snapshot?.checkedChecklistKeys) {
+        setActiveChecklistState(session.m2Snapshot.checkedChecklistKeys);
+      } else {
+        setActiveChecklistState({});
+      }
+
+      if (session.m3Snapshot?.stepStatuses) {
+        setActiveStepStatuses(session.m3Snapshot.stepStatuses);
+      } else {
+        setActiveStepStatuses({});
+      }
+
+      if (session.m3Snapshot?.revealedHints) {
+        setActiveRevealedHints(session.m3Snapshot.revealedHints);
+      } else {
+        setActiveRevealedHints({});
+      }
+
+      // Restore M4 verification snapshot if present
+      if (session.m4Snapshot?.report) {
+        setActiveVerificationReport(session.m4Snapshot.report);
+        setTestExecutionResult(session.m4Snapshot.testExecutionResult || null);
+        setActiveDraftPR(session.m4Snapshot.draftPR || null);
+        setActiveDiffText(session.m4Snapshot.rawDiffText || session.m4Snapshot.report.parsed_diff?.raw_diff_sample || '');
+        setOptInStoreDiff(session.m4Snapshot.hasRawDiffStored || false);
+      } else {
+        setActiveDiffText('');
+        setOptInStoreDiff(false);
+      }
+
+      return session;
+    } catch (e) {
+      console.warn('Storage operation failed, proceeding in stateless mode:', e);
+      return null;
+    }
+  };
+
   useEffect(() => {
     fetch('/api/health')
       .then((res) => {
@@ -68,6 +150,19 @@ export default function App() {
       .catch((err: Error) => {
         setHealthError(err.message);
         setHealthLoading(false);
+      });
+
+    learningHistoryStorage
+      .checkStorageStatus()
+      .then((status) => {
+        setStorageMode(status.mode);
+        if (status.warning) {
+          setStorageWarning(status.warning);
+        }
+      })
+      .catch(() => {
+        setStorageMode('memory');
+        setStorageWarning('Local storage is unavailable. Session progress is temporary.');
       });
   }, []);
 
@@ -141,6 +236,14 @@ export default function App() {
     setLearnError(null);
 
     try {
+      const session = await getOrCreateSession(issue.number, issue.title, 'm2_learn');
+
+      if (session?.m2Snapshot?.brief) {
+        setActiveLearningBrief(session.m2Snapshot.brief);
+        setActiveChecklistState(session.m2Snapshot.checkedChecklistKeys || {});
+        return;
+      }
+
       const resp = await fetch('/api/learn', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -158,10 +261,40 @@ export default function App() {
       }
 
       setActiveLearningBrief(data);
+
+      if (session) {
+        await learningHistoryStorage.updateSessionM2Snapshot(session.sessionId, {
+          brief: data,
+          checkedChecklistKeys: {},
+          completedChecklistCount: 0,
+          totalChecklistCount: data.readiness_checklist?.length || 0,
+          savedAt: new Date().toISOString(),
+        });
+        checkQuota();
+      }
     } catch (err: any) {
       setLearnError(`Failed to generate learning brief for #${issue.number}: ${err.message}`);
     } finally {
       setLearningIssueId(null);
+    }
+  };
+
+  const handleChecklistChange = async (checkedItems: Record<string, boolean>) => {
+    setActiveChecklistState(checkedItems);
+    if (currentSessionId && activeLearningBrief) {
+      try {
+        const completedCount = activeLearningBrief.readiness_checklist.filter((_, idx) => !!checkedItems[`chk-${idx}`]).length;
+        await learningHistoryStorage.updateSessionM2Snapshot(currentSessionId, {
+          brief: activeLearningBrief,
+          checkedChecklistKeys: checkedItems,
+          completedChecklistCount: completedCount,
+          totalChecklistCount: activeLearningBrief.readiness_checklist.length,
+          savedAt: new Date().toISOString(),
+        });
+        checkQuota();
+      } catch (e) {
+        console.warn('Failed to update M2 checklist state:', e);
+      }
     }
   };
 
@@ -172,6 +305,19 @@ export default function App() {
     setGuidedError(null);
 
     try {
+      const issueTitle =
+        activeLearningBrief?.issue_number === issueNumber
+          ? activeLearningBrief.issue_title
+          : `Issue #${issueNumber}`;
+      const session = await getOrCreateSession(issueNumber, issueTitle, 'm3_guided');
+
+      if (session?.m3Snapshot?.plan) {
+        setActiveGuidedPlan(session.m3Snapshot.plan);
+        setActiveStepStatuses(session.m3Snapshot.stepStatuses || {});
+        setActiveRevealedHints(session.m3Snapshot.revealedHints || {});
+        return;
+      }
+
       const resp = await fetch('/api/guided-implementation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -190,10 +336,68 @@ export default function App() {
       }
 
       setActiveGuidedPlan(data);
+
+      if (session) {
+        await learningHistoryStorage.updateSessionM3Snapshot(session.sessionId, {
+          plan: data,
+          activeStepIndex: 0,
+          stepStatuses: {},
+          revealedHints: {},
+          expandedPatches: {},
+          completedStepsCount: 0,
+          totalStepsCount: data.steps?.length || 0,
+          savedAt: new Date().toISOString(),
+        });
+        checkQuota();
+      }
     } catch (err: any) {
       setGuidedError(`Failed to generate guided implementation for #${issueNumber}: ${err.message}`);
     } finally {
       setGuidedIssueId(null);
+    }
+  };
+
+  const handleStepStatusesChange = async (statuses: Record<string, StepStatus>) => {
+    setActiveStepStatuses(statuses);
+    if (currentSessionId && activeGuidedPlan) {
+      try {
+        const completedCount = activeGuidedPlan.steps.filter((s) => statuses[s.id] === 'completed').length;
+        await learningHistoryStorage.updateSessionM3Snapshot(currentSessionId, {
+          plan: activeGuidedPlan,
+          activeStepIndex: 0,
+          stepStatuses: statuses,
+          revealedHints: activeRevealedHints,
+          expandedPatches: {},
+          completedStepsCount: completedCount,
+          totalStepsCount: activeGuidedPlan.steps.length,
+          savedAt: new Date().toISOString(),
+        });
+        checkQuota();
+      } catch (e) {
+        console.warn('Failed to update step statuses:', e);
+      }
+    }
+  };
+
+  const handleRevealedHintsChange = async (hints: Record<string, boolean>) => {
+    setActiveRevealedHints(hints);
+    if (currentSessionId && activeGuidedPlan) {
+      try {
+        const completedCount = activeGuidedPlan.steps.filter((s) => activeStepStatuses[s.id] === 'completed').length;
+        await learningHistoryStorage.updateSessionM3Snapshot(currentSessionId, {
+          plan: activeGuidedPlan,
+          activeStepIndex: 0,
+          stepStatuses: activeStepStatuses,
+          revealedHints: hints,
+          expandedPatches: {},
+          completedStepsCount: completedCount,
+          totalStepsCount: activeGuidedPlan.steps.length,
+          savedAt: new Date().toISOString(),
+        });
+        checkQuota();
+      } catch (e) {
+        console.warn('Failed to update revealed hints:', e);
+      }
     }
   };
 
@@ -202,9 +406,29 @@ export default function App() {
 
     setVerifyingIssueId(issueNumber);
     setVerificationError(null);
-    setIsAnalyzingVerification(true);
 
     try {
+      const issueTitle =
+        activeGuidedPlan?.issue_number === issueNumber
+          ? activeGuidedPlan.issue_title
+          : activeLearningBrief?.issue_number === issueNumber
+          ? activeLearningBrief.issue_title
+          : `Issue #${issueNumber}`;
+
+      const session = await getOrCreateSession(issueNumber, issueTitle, 'm4_verify');
+
+      // Genuinely restore existing verification snapshot if available and no custom diff passed
+      if (!customDiff && session?.m4Snapshot?.report) {
+        setActiveVerificationReport(session.m4Snapshot.report);
+        setTestExecutionResult(session.m4Snapshot.testExecutionResult || null);
+        setActiveDraftPR(session.m4Snapshot.draftPR || null);
+        setActiveDiffText(session.m4Snapshot.rawDiffText || session.m4Snapshot.report.parsed_diff?.raw_diff_sample || '');
+        setOptInStoreDiff(session.m4Snapshot.hasRawDiffStored || false);
+        return;
+      }
+
+      setIsAnalyzingVerification(true);
+
       const resp = await fetch('/api/verification/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -226,6 +450,23 @@ export default function App() {
       // Reset execution & draft PR on fresh verification report
       setTestExecutionResult(null);
       setActiveDraftPR(null);
+      setActiveDiffText(customDiff || data.parsed_diff?.raw_diff_sample || '');
+
+      if (session) {
+        await learningHistoryStorage.updateSessionM4Snapshot(
+          session.sessionId,
+          {
+            report: data,
+            hasRawDiffStored: optInStoreDiff,
+            rawDiffText: optInStoreDiff ? (customDiff || data.parsed_diff?.raw_diff_sample || '') : undefined,
+            testExecutionResult: null,
+            draftPR: null,
+            savedAt: new Date().toISOString(),
+          },
+          optInStoreDiff,
+        );
+        checkQuota();
+      }
     } catch (err: any) {
       setVerificationError(`Failed to verify changes for #${issueNumber}: ${err.message}`);
     } finally {
@@ -234,9 +475,10 @@ export default function App() {
     }
   };
 
-  const handleReAnalyzeDiff = async (diffText: string) => {
+  const handleReAnalyzeDiff = async (diffText: string, optIn?: boolean) => {
     if (!activeVerificationReport || !currentRepoUrl) return;
     setIsAnalyzingVerification(true);
+    const saveDiff = optIn !== undefined ? optIn : optInStoreDiff;
     try {
       const resp = await fetch('/api/verification/analyze', {
         method: 'POST',
@@ -256,10 +498,52 @@ export default function App() {
       }
 
       setActiveVerificationReport(data);
+      setActiveDiffText(diffText);
+      setOptInStoreDiff(saveDiff);
+
+      if (currentSessionId) {
+        await learningHistoryStorage.updateSessionM4Snapshot(
+          currentSessionId,
+          {
+            report: data,
+            hasRawDiffStored: saveDiff,
+            rawDiffText: saveDiff ? diffText : undefined,
+            testExecutionResult,
+            draftPR: activeDraftPR,
+            savedAt: new Date().toISOString(),
+          },
+          saveDiff,
+        );
+        checkQuota();
+      }
     } catch (err: any) {
       setVerificationError(`Failed to re-analyze diff: ${err.message}`);
     } finally {
       setIsAnalyzingVerification(false);
+    }
+  };
+
+  const handleOptInStoreDiffChange = async (optIn: boolean, currentDiff: string) => {
+    setOptInStoreDiff(optIn);
+    setActiveDiffText(currentDiff);
+    if (currentSessionId && activeVerificationReport) {
+      try {
+        await learningHistoryStorage.updateSessionM4Snapshot(
+          currentSessionId,
+          {
+            report: activeVerificationReport,
+            hasRawDiffStored: optIn,
+            rawDiffText: optIn ? currentDiff : undefined,
+            testExecutionResult,
+            draftPR: activeDraftPR,
+            savedAt: new Date().toISOString(),
+          },
+          optIn,
+        );
+        checkQuota();
+      } catch (e) {
+        console.warn('Failed to update diff opt-in preference:', e);
+      }
     }
   };
 
@@ -290,6 +574,21 @@ export default function App() {
       }
 
       setTestExecutionResult(data);
+      if (currentSessionId && activeVerificationReport) {
+        await learningHistoryStorage.updateSessionM4Snapshot(
+          currentSessionId,
+          {
+            report: activeVerificationReport,
+            hasRawDiffStored: optInStoreDiff,
+            rawDiffText: optInStoreDiff ? diffText : undefined,
+            testExecutionResult: data,
+            draftPR: activeDraftPR,
+            savedAt: new Date().toISOString(),
+          },
+          optInStoreDiff,
+        );
+        checkQuota();
+      }
     } catch (err: any) {
       setVerificationError(`Test execution error: ${err.message}`);
     } finally {
@@ -323,6 +622,21 @@ export default function App() {
       }
 
       setActiveDraftPR(data);
+      if (currentSessionId && activeVerificationReport) {
+        await learningHistoryStorage.updateSessionM4Snapshot(
+          currentSessionId,
+          {
+            report: activeVerificationReport,
+            hasRawDiffStored: optInStoreDiff,
+            rawDiffText: optInStoreDiff ? diffText : undefined,
+            testExecutionResult: testExecutionResult,
+            draftPR: data,
+            savedAt: new Date().toISOString(),
+          },
+          optInStoreDiff,
+        );
+        checkQuota();
+      }
     } catch (err: any) {
       setVerificationError(`Failed to prepare draft PR: ${err.message}`);
     } finally {
@@ -353,9 +667,21 @@ export default function App() {
               <span><strong>GitHub Token:</strong> {health.has_github_token ? 'Configured' : 'Missing (60 req/hr limit)'}</span>
               <span>•</span>
               <span><strong>Gemini Key:</strong> {health.has_gemini_key ? 'Configured (Gemma 4)' : 'Missing (Deterministic only)'}</span>
+              <span>•</span>
+              <span><strong>Storage:</strong> {storageMode === 'indexeddb' ? 'IndexedDB (Persistent)' : 'In-Memory (Temporary)'}</span>
             </>
           )}
         </div>
+        {storageWarning && (
+          <div className="alert alert-warning" style={{ marginTop: '0.75rem', padding: '0.5rem 1rem', borderRadius: '4px', background: '#fee2e2', color: '#991b1b', border: '1px solid #fecaca', fontSize: '0.85rem' }}>
+            <span>⚠️ <strong>Storage Warning:</strong> {storageWarning}</span>
+          </div>
+        )}
+        {quotaWarning && (
+          <div className="alert alert-warning" style={{ marginTop: '0.75rem', padding: '0.5rem 1rem', borderRadius: '4px', background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', fontSize: '0.85rem' }}>
+            <span>⚠️ <strong>Storage notice:</strong> {quotaWarning}</span>
+          </div>
+        )}
       </header>
 
       <main>
@@ -482,6 +808,8 @@ export default function App() {
           brief={activeLearningBrief}
           onClose={() => setActiveLearningBrief(null)}
           onStartGuidedImplementation={handleSelectGuided}
+          initialCheckedItems={activeChecklistState}
+          onChecklistChange={handleChecklistChange}
         />
       )}
 
@@ -491,6 +819,10 @@ export default function App() {
           plan={activeGuidedPlan}
           onClose={() => setActiveGuidedPlan(null)}
           onOpenVerification={handleSelectVerify}
+          initialStepStatuses={activeStepStatuses}
+          initialRevealedHints={activeRevealedHints}
+          onStepStatusesChange={handleStepStatusesChange}
+          onRevealedHintsChange={handleRevealedHintsChange}
         />
       )}
 
@@ -507,6 +839,9 @@ export default function App() {
           onPrepareDraftPR={handlePrepareDraftPR}
           isPreparingPR={isPreparingPR}
           draftPR={activeDraftPR}
+          initialDiff={activeDiffText}
+          initialOptInStoreDiff={optInStoreDiff}
+          onOptInStoreDiffChange={handleOptInStoreDiffChange}
         />
       )}
     </div>

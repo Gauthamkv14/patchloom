@@ -41,6 +41,8 @@ class Settings(BaseSettings):
     HEALTH_RATE_LIMIT: str = Field(default="60/minute")
     TRUSTED_PROXIES: Union[list[str], str] = Field(default_factory=list)
     ENABLE_RATE_LIMIT: bool = Field(default=True)
+    EXECUTION_SIGNING_SECRET: Optional[str] = Field(default=None)
+    EXECUTION_PLAN_TTL_SECONDS: int = Field(default=1800)
 
     @field_validator("TRUSTED_PROXIES", mode="before")
     @classmethod

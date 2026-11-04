@@ -1,6 +1,7 @@
 """Pydantic schemas and data models for PatchLoom."""
 
 from datetime import datetime, timezone
+from enum import Enum
 from typing import Any, Literal, Optional
 from pydantic import BaseModel, Field, HttpUrl, field_validator
 
@@ -654,6 +655,19 @@ class DiscoveredTest(BaseModel):
     evidence: IntelligenceEvidence
 
 
+class SupportedRunner(str, Enum):
+    """Supported isolated test runner identifiers."""
+
+    PYTEST = "pytest"
+    PYTHON_PYTEST = "python_pytest"
+    PYTHON_UNITTEST = "python_unittest"
+    NPM_TEST = "npm_test"
+    VITEST = "vitest"
+    JEST = "jest"
+    CARGO_TEST = "cargo_test"
+    GO_TEST = "go_test"
+
+
 class TestExecutionPlan(BaseModel):
     """Strictly allowlisted test execution plan to be authorized by contributor."""
 
@@ -664,6 +678,14 @@ class TestExecutionPlan(BaseModel):
     working_dir: str = Field(default=".")
     timeout_seconds: int = Field(default=30, ge=5, le=120)
     is_allowlisted: bool = Field(default=True)
+    expires_at: Optional[str] = Field(
+        default=None,
+        description="ISO 8601 timestamp after which this execution plan is no longer valid",
+    )
+    signature: Optional[str] = Field(
+        default=None,
+        description="Server-generated HMAC-SHA256 signature binding plan parameters to repository context",
+    )
     disclaimer: str = Field(
         default="Execution runs in an isolated, network-disabled Docker container with dropped capabilities."
     )

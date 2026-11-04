@@ -9,7 +9,7 @@ import {
 interface VerificationModalProps {
   report: VerificationAnalysisReport;
   onClose: () => void;
-  onReAnalyzeDiff: (diffText: string) => Promise<void>;
+  onReAnalyzeDiff: (diffText: string, optInStoreDiff?: boolean) => Promise<void>;
   isAnalyzingDiff: boolean;
   onExecuteTestPlan: (plan: TestExecutionPlan, diffText: string, authorized: boolean) => Promise<void>;
   isExecutingTests: boolean;
@@ -17,6 +17,9 @@ interface VerificationModalProps {
   onPrepareDraftPR: (diffText: string) => Promise<void>;
   isPreparingPR: boolean;
   draftPR: DraftPR | null;
+  initialDiff?: string;
+  initialOptInStoreDiff?: boolean;
+  onOptInStoreDiffChange?: (optIn: boolean, currentDiff: string) => void;
 }
 
 type TabType = 'diff' | 'tests' | 'review' | 'readiness' | 'draft_pr';
@@ -32,9 +35,13 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
   onPrepareDraftPR,
   isPreparingPR,
   draftPR,
+  initialDiff,
+  initialOptInStoreDiff,
+  onOptInStoreDiffChange,
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>('diff');
-  const [diffInput, setDiffInput] = useState<string>(report.parsed_diff.raw_diff_sample || '');
+  const [diffInput, setDiffInput] = useState<string>(initialDiff || report.parsed_diff.raw_diff_sample || '');
+  const [optInStoreDiff, setOptInStoreDiff] = useState<boolean>(initialOptInStoreDiff || false);
   const [authorizedExecution, setAuthorizedExecution] = useState<boolean>(false);
   const [selectedSeverity, setSelectedSeverity] = useState<string>('all');
   const [copiedSummary, setCopiedSummary] = useState<boolean>(false);
@@ -277,14 +284,40 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
                   className="diff-textarea"
                   rows={8}
                   value={diffInput}
-                  onChange={(e) => setDiffInput(e.target.value)}
+                  onChange={(e) => {
+                    const nextVal = e.target.value;
+                    setDiffInput(nextVal);
+                    if (optInStoreDiff) {
+                      onOptInStoreDiffChange?.(true, nextVal);
+                    }
+                  }}
                   placeholder="Paste git diff here..."
                 />
+                <div className="diff-opt-in-box" style={{ marginTop: '0.75rem', marginBottom: '0.75rem', padding: '0.6rem 0.85rem', background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: '4px' }}>
+                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', cursor: 'pointer', fontSize: '0.85rem', color: '#334155' }}>
+                    <input
+                      type="checkbox"
+                      checked={optInStoreDiff}
+                      onChange={(e) => {
+                        const val = e.target.checked;
+                        setOptInStoreDiff(val);
+                        onOptInStoreDiffChange?.(val, diffInput);
+                      }}
+                      style={{ marginTop: '0.2rem' }}
+                    />
+                    <span>
+                      <strong>Opt-in: Save raw diff in local session history.</strong>
+                      <span style={{ display: 'block', color: '#64748b', fontSize: '0.8rem', marginTop: '0.2rem' }}>
+                        By default, raw diff text is not stored in your local session history to protect private code changes. Check this box only if you wish to persist your diff locally.
+                      </span>
+                    </span>
+                  </label>
+                </div>
                 <div className="diff-editor-actions">
                   <button
                     type="button"
                     className="btn-primary"
-                    onClick={() => onReAnalyzeDiff(diffInput)}
+                    onClick={() => onReAnalyzeDiff(diffInput, optInStoreDiff)}
                     disabled={isAnalyzingDiff}
                   >
                     {isAnalyzingDiff ? 'Analyzing Diff...' : '🔄 Re-Analyze Diff'}
@@ -354,10 +387,21 @@ export const VerificationModal: React.FC<VerificationModalProps> = ({
                       {executionResult.status.toUpperCase()}
                     </span>
                     <span className="result-meta">
-                      Exit Code: {executionResult.exit_code} • {executionResult.duration_seconds.toFixed(2)}s
+                      {executionResult.exit_code !== null && executionResult.exit_code !== undefined
+                        ? `Exit Code: ${executionResult.exit_code} • `
+                        : executionResult.status === 'execution_unavailable'
+                        ? '(Execution Not Performed) • '
+                        : ''}
+                      {executionResult.duration_seconds.toFixed(2)}s
                       {executionResult.simulated && ' (Simulated)'}
                     </span>
                   </div>
+
+                  {executionResult.status === 'execution_unavailable' && (
+                    <div className="unrelated-files-alert" style={{ marginBottom: '1rem' }}>
+                      <strong>⚠️ Execution Not Performed:</strong> Real test execution was safely bypassed. PatchLoom runs tests exclusively within isolated Docker containers when a prepared repository workspace and provisioned runner image are present. Host execution is strictly disabled.
+                    </div>
+                  )}
 
                   {(executionResult.tests_total !== null && executionResult.tests_total !== undefined) && (
                     <div className="result-counts-bar">

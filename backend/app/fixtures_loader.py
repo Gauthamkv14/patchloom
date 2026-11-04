@@ -619,7 +619,16 @@ def load_fixture_verification(
 
     # If pre-saved snapshot exists and no custom diff was provided, return snapshot
     if report_data and not diff_text.strip():
-        return VerificationAnalysisReport.model_validate(report_data)
+        report = VerificationAnalysisReport.model_validate(report_data)
+        if report.suggested_execution_plan:
+            from app.plan_signing import sign_execution_plan
+            report.suggested_execution_plan = sign_execution_plan(
+                repo_url=repo_url,
+                issue_number=issue_number,
+                plan=report.suggested_execution_plan,
+                secret="patchloom_demo_fixture_secret",
+            )
+        return report
 
     # Otherwise, dynamically parse the diff and run deterministic fallback on fixture repo data
     from app.diff_analyzer import parse_git_diff

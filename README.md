@@ -228,6 +228,8 @@ cp .env.example .env
 | `MAX_PROMPT_CHARS` | Optional | `60000` | Upper limit on assembled prompt character count. |
 | `MAX_CANDIDATES` | Optional | `6` | Upper limit on candidate issues evaluated per fit request. |
 | `TRUSTED_PROXIES` | Optional | `127.0.0.1,172.28.0.10` | IP/CIDR addresses allowed to pass client IP headers. |
+| `EXECUTION_SIGNING_SECRET` | Optional | *ephemeral* | Secret key for signing test execution plans with HMAC-SHA256. |
+| `EXECUTION_PLAN_TTL_SECONDS` | Optional | `1800` | Expiration time window (seconds) for test execution plans. |
 
 > **Credential Safety:** `GEMINI_API_KEY` and `GITHUB_TOKEN` remain strictly on the server. They are never logged, never returned in API payloads, and never bundled into frontend assets. The backend boots cleanly even when keys are absent.
 
@@ -284,6 +286,7 @@ PatchLoom includes 3 committed repository snapshots in `fixtures/` allowing comp
 - **Prompt Injection Resilience:** Repository metadata, descriptions, comments, and file paths are treated as untrusted user data. They are wrapped in `<untrusted_issue_data>` delimiters with defanged tag breakout protection.
 - **Epistemic Invariant (No False Negatives):** Missing or unqueried data is labeled `unknown` or `none_detected`. PatchLoom never turns an incomplete lookup into a verified negative.
 - **Deterministic Fallback Transparency:** If Gemma 4 encounters rate limits or upstream provider errors, PatchLoom honestly surfaces `ai_status: unavailable_or_invalid` with clear explanations. Fallback scores are never disguised as AI results.
+- **Isolated Test Execution Boundary:** Test commands are strictly validated against immutable runner definitions and executed in disposable, network-disabled, read-only Docker containers with dropped capabilities and dropped non-root privileges. Real repository test execution remains unavailable (`execution_unavailable`) until a safe workspace is supplied and provisioned runner images with pre-installed test tooling are configured; base runtime images lack third-party test frameworks (`pytest`, `vitest`), and host execution fallback is strictly prohibited.
 
 ---
 

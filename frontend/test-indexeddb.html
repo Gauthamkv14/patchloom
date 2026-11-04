@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PatchLoom IndexedDB Browser Test</title>
+</head>
+<body>
+  <h1>PatchLoom IndexedDB Browser Test Runner</h1>
+  <div id="status">Running tests...</div>
+  <pre id="log"></pre>
+
+  <script type="module">
+    import { LearningHistoryStorageAdapter } from '/src/storage/indexedDb.ts';
+
+    const logEl = document.getElementById('log');
+    const statusEl = document.getElementById('status');
+
+    function log(msg) {
+      logEl.textContent += msg + '\n';
+      console.log(msg);
+    }
+
+    const testResults = [];
+
+    async function runTest(name, fn) {
+      try {
+        await fn();
+        testResults.push({ name, passed: true });
+        log(`✔ ${name}`);
+      } catch (err) {
+        testResults.push({ name, passed: false, error: err.message, stack: err.stack });
+        log(`✖ ${name}: ${err.message}`);
+      }
+    }
+
+    async function executeSuite() {
+      log('Starting Real Browser IndexedDB Persistence Suite...\n');
+
+      // Test 1: Real browser IndexedDB environment detection
+      await runTest('Browser detects native window.indexedDB as persistent storage', async () => {
+        const storage = new LearningHistoryStorageAdapter();
+        if (storage.getStorageMode() !== 'indexeddb') {
+          throw new Error(`Expected storageMode to be 'indexeddb', got '${storage.getStorageMode()}'`);
+        }
+        if (!storage.isPersistent()) {
+          throw new Error('Expected isPersistent() to be true in browser');
+        }
+        const status = await storage.checkStorageStatus();
+        if (status.mode !== 'indexeddb' || !status.persistent) {
+          throw new Error(`Expected status mode 'indexeddb', persistent true. Got: ${JSON.stringify(status)}`);
+        }
+      });
+
+      // Test 2: Complete persistence, close, reload, and restore cycle
+      let savedSessionId = null;
+
+      await runTest('1. Create session, persist M2 checklist, M3 steps, M4 verification with opt-in diff', async () => {
+        const storage = new LearningHistoryStorageAdapter();
+        await storage.clearAllSessions();
+
+        const session = await storage.createSession({
+          repoUrl: 'https://github.com/psf/requests',
+          issueNumber: 6542,
+          issueTitle: 'Custom SSL context in HTTPAdapter',
+          isDemo: false,
+        });
+
+        savedSessionId = session.sessionId;
+        if (!savedSessionId) throw new Error('Failed to generate sessionId');
+
+        // M2 Brief and Checklist
+        await storage.updateSessionM2Snapshot(savedSessionId, {
+          brief: {
+            issue_number: 6542,
+            issue_title: 'Custom SSL context in HTTPAdapter',
+            issue_url: 'https://github.com/psf/requests/issues/6542',
+            repo_url: 'https://github.com/psf/requests',
+            experience_level: 'intermediate',
+            explanation: {
+              summary: 'Support passing custom SSLContext',
+              problem_description: 'HTTPAdapter creates default context',
+              expected_outcome: 'HTTPAdapter forwards ssl_context to PoolManager',
+              explicit_requirements: ['Support ssl_context kwarg'],
+              constraints_and_conditions: [],
+              ambiguities_and_unanswered_questions: [],
+              experience_adaptation_note: 'Adapter delegation',
+            },
+            requirements: [],
+            relevant_modules: ['adapters'],
+            investigation_targets: [{ path: 'requests/adapters.py', why_relevant: 'Pool init', what_to_inspect: 'init_poolmanager', kind: 'detected', evidence: { status: 'verified', source: 'file_tree', observed_at: 'now', detail: '' } }],
+            related_tests_and_docs: ['tests/test_adapters.py'],
+            concepts: [{ name: 'TLS Context Management', explanation: 'SSLContext usage', why_it_matters: 'Connection security', prerequisites: [], learning_order: 1, difficulty: 'intermediate' }],
+            learning_objectives: [],
+            readiness_checklist: [
+              { category: 'problem_understanding', item: 'Understand PoolManager creation', guidance: 'Inspect init_poolmanager' },
+              { category: 'expected_behavior', item: 'Verify backwards compatibility', guidance: 'Check default None context' },
+            ],
+            unresolved_questions: [],
+            ai_status: 'complete',
+            warnings: [],
+            checked_at: new Date().toISOString(),
+            evidence: { status: 'verified', source: 'local_rule', observed_at: 'now', detail: '' },
+          },
+          checkedChecklistKeys: { 'chk-0': true, 'chk-1': true },
+          completedChecklistCount: 2,
+          totalChecklistCount: 2,
+          savedAt: new Date().toISOString(),
+        });
+
+        // M3 Guided Implementation Plan
+        await storage.updateSessionM3Snapshot(savedSessionId, {
+          plan: {
+            issue_number: 6542,
+            issue_title: 'Custom SSL context in HTTPAdapter',
+            issue_url: 'https://github.com/psf/requests/issues/6542',
+            experience_level: 'intermediate',
+            overview: 'Roadmap to pass custom context',
+            steps: [
+              {
+                id: 'step-1',
+                order: 1,
+                title: 'Add ssl_context parameter to __init__',
+                objective: 'Record self.ssl_context',
+                why_it_matters: 'Stores configuration',
+                files: ['requests/adapters.py'],
+                what_to_inspect: 'requests/adapters.py:HTTPAdapter.__init__',
+                expected_outcome: 'self.ssl_context assigned',
+                dependencies: [],
+                completion_criteria: 'Attribute set',
+                hints: [{ level: 1, title: 'Check kwargs', content: 'Look at existing kwargs', kind: 'evidence_based' }],
+                checkpoint: { question: 'Is kwarg present?', verification_guidance: 'Check init signature' },
+              },
+              {
+                id: 'step-2',
+                order: 2,
+                title: 'Forward ssl_context to init_poolmanager',
+                objective: 'Pass context to pool kwargs',
+                why_it_matters: 'Applies TLS configuration',
+                files: ['requests/adapters.py'],
+                what_to_inspect: 'init_poolmanager call',
+                expected_outcome: 'PoolManager receives ssl_context',
+                dependencies: ['step-1'],
+                completion_criteria: 'Pool constructed with context',
+                hints: [],
+                checkpoint: { question: 'Does pool receive context?', verification_guidance: 'Inspect init_poolmanager' },
+              },
+            ],
+            exploration_targets: [],
+            approaches: [],
+            recommended_approach_id: '',
+            ai_status: 'complete',
+            warnings: [],
+            checked_at: new Date().toISOString(),
+            evidence: { status: 'verified', source: 'local_rule', observed_at: 'now', detail: '' },
+          },
+          activeStepIndex: 1,
+          stepStatuses: { 'step-1': 'completed', 'step-2': 'in_progress' },
+          revealedHints: { 'step-1-0': true },
+          expandedPatches: {},
+          completedStepsCount: 1,
+          totalStepsCount: 2,
+          savedAt: new Date().toISOString(),
+        });
+
+        // M4 Verification Report with opt-in diff and execution_unavailable status
+        await storage.updateSessionM4Snapshot(
+          savedSessionId,
+          {
+            report: {
+              issue_number: 6542,
+              issue_title: 'Custom SSL context in HTTPAdapter',
+              repo_url: 'https://github.com/psf/requests',
+              parsed_diff: {
+                files: [{ path: 'requests/adapters.py', change_type: 'modified', lines_added: 4, lines_removed: 1, detected_symbols: ['init_poolmanager'] }],
+                total_files: 1,
+                lines_added: 4,
+                lines_removed: 1,
+                raw_diff_sample: '--- a/requests/adapters.py\n+++ b/requests/adapters.py\n@@ -100,2 +100,5 @@\n',
+                is_truncated: false,
+                warnings: [],
+              },
+              roadmap_alignment_summary: 'Aligned with Step 1 and Step 2',
+              potentially_unrelated_files: [],
+              discovered_tests: [{ test_file: 'tests/test_adapters.py', framework: 'pytest', test_command: 'pytest tests/test_adapters.py', confidence: 'high', selection_rationale: 'Adapter tests', kind: 'counterpart_test', evidence: { status: 'verified', source: 'file_tree', observed_at: 'now', detail: '' } }],
+              review_findings: [
+                {
+                  finding_id: 'rf-1',
+                  severity: 'medium',
+                  category: 'error_handling',
+                  title: 'Ensure None context does not override default SSLContext',
+                  explanation: 'Passing None should preserve default urllib3 SSL behavior.',
+                  evidence: 'adapters.py:102',
+                  file_path: 'requests/adapters.py',
+                  why_it_matters: 'Prevents regression for existing callers',
+                  suggested_action: 'Add default None check',
+                  confidence: 'high',
+                },
+              ],
+              regression_risks: [
+                {
+                  risk_id: 'rr-1',
+                  affected_module_or_file: 'requests/adapters.py',
+                  risk_type: 'potentially_affected',
+                  evidence: 'adapters.py pool manager kwargs',
+                  potential_impact: 'Custom pool kwargs collision',
+                  suggested_verification: 'Run test_adapters.py with mock pool',
+                  confidence: 'medium',
+                },
+              ],
+              readiness: {
+                status: 'needs_attention',
+                summary: 'Address review finding rf-1 before PR submission',
+                outstanding_items: ['Ensure default None check is tested'],
+                checklist_status: { 'Diff bounded': true, 'Roadmap aligned': true },
+              },
+              ai_status: 'complete',
+              warnings: [],
+              evidence: { status: 'verified', source: 'local_rule', observed_at: 'now', detail: '' },
+              checked_at: new Date().toISOString(),
+            },
+            hasRawDiffStored: true,
+            rawDiffText: 'diff --git a/requests/adapters.py b/requests/adapters.py\n+        self.ssl_context = ssl_context',
+            testExecutionResult: {
+              status: 'execution_unavailable',
+              runner: 'pytest',
+              command: 'pytest tests/test_adapters.py',
+              duration_seconds: 0.0,
+              exit_code: 0,
+              stdout_bounded: '',
+              stderr_bounded: 'Docker execution is unavailable: prepared workspace not provisioned.',
+              failure_details: [],
+              failure_locations: [],
+              ai_likely_causes: [],
+              ai_suggested_next_steps: ['Run tests locally in your virtual environment'],
+              simulated: false,
+              executed_at: new Date().toISOString(),
+            },
+            draftPR: {
+              title: 'Support custom SSL context in HTTPAdapter (#6542)',
+              summary_of_changes: 'Adds ssl_context kwarg to HTTPAdapter and passes down to PoolManager.',
+              problem_addressed: 'Users could not easily configure custom TLS context.',
+              implementation_overview: 'Modified HTTPAdapter.__init__ and init_poolmanager.',
+              tests_performed: {},
+              known_limitations: ['Requires python >= 3.8'],
+              remaining_concerns: [],
+              manual_verification_checklist: ['Verified with custom context', 'Verified default behavior'],
+            },
+            savedAt: new Date().toISOString(),
+          },
+          true, // opt-in store diff = true
+        );
+
+        // Close connection to simulate browser tab unload / close
+        await storage.closeDatabase();
+      });
+
+      // Test 3: Reload simulation — Open fresh adapter instance against the same IndexedDB
+      await runTest('2. Reload simulation: Open fresh adapter, retrieve session and verify all progress genuinely restored', async () => {
+        const reloadedStorage = new LearningHistoryStorageAdapter();
+        const restored = await reloadedStorage.getSession(savedSessionId);
+
+        if (!restored) throw new Error(`Could not restore session ${savedSessionId} after reload`);
+        if (restored.sessionId !== savedSessionId) throw new Error('SessionId mismatch');
+
+        // Verify M2 checklist restoration
+        if (!restored.m2Snapshot) throw new Error('Missing restored m2Snapshot');
+        if (restored.m2Snapshot.checkedChecklistKeys['chk-0'] !== true || restored.m2Snapshot.checkedChecklistKeys['chk-1'] !== true) {
+          throw new Error('M2 checklist confirmation state was not genuinely restored');
+        }
+        if (restored.m2Snapshot.completedChecklistCount !== 2) {
+          throw new Error(`Expected completedChecklistCount 2, got ${restored.m2Snapshot.completedChecklistCount}`);
+        }
+
+        // Verify M3 step progress restoration
+        if (!restored.m3Snapshot) throw new Error('Missing restored m3Snapshot');
+        if (restored.m3Snapshot.stepStatuses['step-1'] !== 'completed') {
+          throw new Error(`Expected step-1 'completed', got '${restored.m3Snapshot.stepStatuses['step-1']}'`);
+        }
+        if (restored.m3Snapshot.stepStatuses['step-2'] !== 'in_progress') {
+          throw new Error(`Expected step-2 'in_progress', got '${restored.m3Snapshot.stepStatuses['step-2']}'`);
+        }
+        if (restored.m3Snapshot.revealedHints['step-1-0'] !== true) {
+          throw new Error('M3 hint reveal state was not genuinely restored');
+        }
+
+        // Verify M4 verification restoration
+        if (!restored.m4Snapshot) throw new Error('Missing restored m4Snapshot');
+        if (restored.m4Snapshot.report.review_findings.length !== 1) {
+          throw new Error('M4 review findings not restored');
+        }
+        if (restored.m4Snapshot.report.regression_risks.length !== 1) {
+          throw new Error('M4 regression risks not restored');
+        }
+        if (restored.m4Snapshot.report.readiness.status !== 'needs_attention') {
+          throw new Error('M4 readiness assessment not restored');
+        }
+
+        // Verify execution_unavailable test status is preserved (not claiming passed)
+        if (restored.m4Snapshot.testExecutionResult?.status !== 'execution_unavailable') {
+          throw new Error(`Expected execution_unavailable status, got '${restored.m4Snapshot.testExecutionResult?.status}'`);
+        }
+
+        // Verify draft PR restoration
+        if (!restored.m4Snapshot.draftPR || !restored.m4Snapshot.draftPR.title.includes('#6542')) {
+          throw new Error('M4 draft PR preparation state not restored');
+        }
+
+        // Verify opt-in diff restoration
+        if (!restored.m4Snapshot.hasRawDiffStored || !restored.m4Snapshot.rawDiffText) {
+          throw new Error('Opt-in diff was not restored');
+        }
+
+        // Verify Execution Authorization Invariant: NEVER restored as authorized!
+        const rawJson = JSON.stringify(restored);
+        if (rawJson.includes('"authorized":true') || rawJson.includes('"authorizedExecution":true')) {
+          throw new Error('SECURITY INVARIANT VIOLATION: Execution authorization was persisted/restored!');
+        }
+
+        await reloadedStorage.closeDatabase();
+      });
+
+      // Test 4: Export and import into fresh store
+      await runTest('3. Export session JSON, import into fresh store, and verify zero authorization restored', async () => {
+        const storage1 = new LearningHistoryStorageAdapter();
+        const exportPayloadJson = await storage1.exportHistoryJson();
+        await storage1.clearAllSessions();
+        await storage1.closeDatabase();
+
+        const storage2 = new LearningHistoryStorageAdapter();
+        const importResult = await storage2.importHistoryJson(exportPayloadJson);
+
+        if (!importResult.success) {
+          throw new Error(`Import failed: ${importResult.errors.join(', ')}`);
+        }
+        if (importResult.importedSessionsCount !== 1) {
+          throw new Error(`Expected 1 imported session, got ${importResult.importedSessionsCount}`);
+        }
+
+        const imported = await storage2.getSession(savedSessionId);
+        if (!imported) throw new Error('Could not find imported session');
+
+        if (imported.m2Snapshot?.checkedChecklistKeys['chk-0'] !== true) {
+          throw new Error('Imported M2 checklist state was lost');
+        }
+        if (imported.m3Snapshot?.stepStatuses['step-1'] !== 'completed') {
+          throw new Error('Imported M3 step status was lost');
+        }
+
+        // Verify execution authorization is strictly false
+        const importedJson = JSON.stringify(imported);
+        if (importedJson.includes('"authorized":true') || importedJson.includes('"authorizedExecution":true')) {
+          throw new Error('SECURITY INVARIANT VIOLATION: Imported session contains authorizedExecution=true!');
+        }
+
+        await storage2.closeDatabase();
+      });
+
+      // Test 5: Unavailable storage behavior
+      await runTest('4. Unavailable storage mode exposes temporary warning and memory mode', async () => {
+        // Create an adapter simulating blocked/unavailable IndexedDB by passing null factory
+        const brokenAdapter = new LearningHistoryStorageAdapter(null);
+        if (brokenAdapter.getStorageMode() !== 'memory') {
+          throw new Error(`Expected 'memory' mode, got '${brokenAdapter.getStorageMode()}'`);
+        }
+        if (brokenAdapter.isPersistent()) {
+          throw new Error('Expected isPersistent() to be false for in-memory fallback');
+        }
+
+        const status = await brokenAdapter.checkStorageStatus();
+        if (status.mode !== 'memory' || status.persistent !== false) {
+          throw new Error(`Expected memory mode and persistent=false, got: ${JSON.stringify(status)}`);
+        }
+        if (!status.warning || !status.warning.includes('temporary')) {
+          throw new Error(`Expected clear temporary storage warning message, got: '${status.warning}'`);
+        }
+      });
+
+      // Report final results to Node runner
+      const allPassed = testResults.every(r => r.passed);
+      statusEl.textContent = allPassed ? 'ALL TESTS PASSED' : 'SOME TESTS FAILED';
+      statusEl.style.color = allPassed ? 'green' : 'red';
+
+      try {
+        await fetch('/__test_results', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            allPassed,
+            results: testResults,
+          }),
+        });
+      } catch (e) {
+        log('Failed to post results back to runner: ' + e.message);
+      }
+    }
+
+    executeSuite();
+  </script>
+</body>
+</html>

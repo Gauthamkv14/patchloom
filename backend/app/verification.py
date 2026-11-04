@@ -11,6 +11,7 @@ from typing import Optional
 
 from app.config import settings
 from app.diff_analyzer import evaluate_diff_roadmap_alignment, parse_git_diff
+from app.plan_signing import sign_execution_plan
 from app.github_client import (
     GitHubClient,
     IssueClosedError,
@@ -85,6 +86,12 @@ def create_deterministic_fallback_verification_report(
         modules=modules,
         planned_steps=planned_steps,
     )
+    if suggested_plan:
+        suggested_plan = sign_execution_plan(
+            repo_url=repo_url,
+            issue_number=issue_number,
+            plan=suggested_plan,
+        )
 
     # 3. Deterministic review findings
     findings: list[ReviewFinding] = []
@@ -297,6 +304,12 @@ async def generate_verification_analysis(
         modules=intel.modules,
         planned_steps=planned_steps,
     )
+    if suggested_plan:
+        suggested_plan = sign_execution_plan(
+            repo_url=repo_url,
+            issue_number=issue_number,
+            plan=suggested_plan,
+        )
 
     # 5. Check for Demo Mode or Missing Model Keys
     should_skip_ai = demo or settings.DEMO_MODE or not settings.has_gemini_key

@@ -8,6 +8,10 @@ interface GuidedImplementationModalProps {
   plan: GuidedImplementationPlan;
   onClose: () => void;
   onOpenVerification?: (issueNumber: number) => void;
+  initialStepStatuses?: Record<string, StepStatus>;
+  initialRevealedHints?: Record<string, boolean>;
+  onStepStatusesChange?: (statuses: Record<string, StepStatus>) => void;
+  onRevealedHintsChange?: (hints: Record<string, boolean>) => void;
 }
 
 type StepStatus = 'not_started' | 'in_progress' | 'understood' | 'completed';
@@ -16,11 +20,15 @@ export const GuidedImplementationModal: React.FC<GuidedImplementationModalProps>
   plan,
   onClose,
   onOpenVerification,
+  initialStepStatuses,
+  initialRevealedHints,
+  onStepStatusesChange,
+  onRevealedHintsChange,
 }) => {
   const [activeTab, setActiveTab] = useState<'steps' | 'approaches' | 'exploration'>('steps');
   const [activeStepIndex, setActiveStepIndex] = useState<number>(0);
-  const [stepStatuses, setStepStatuses] = useState<Record<string, StepStatus>>({});
-  const [revealedHints, setRevealedHints] = useState<Record<string, boolean>>({});
+  const [stepStatuses, setStepStatuses] = useState<Record<string, StepStatus>>(initialStepStatuses || {});
+  const [revealedHints, setRevealedHints] = useState<Record<string, boolean>>(initialRevealedHints || {});
   const [expandedPatches, setExpandedPatches] = useState<Record<string, boolean>>({});
   const [copiedText, setCopiedText] = useState(false);
   const [copiedSnippetId, setCopiedSnippetId] = useState<string | null>(null);
@@ -29,17 +37,25 @@ export const GuidedImplementationModal: React.FC<GuidedImplementationModalProps>
   useEffect(() => {
     setActiveTab('steps');
     setActiveStepIndex(0);
-    setStepStatuses({});
-    setRevealedHints({});
+    setStepStatuses(initialStepStatuses || {});
+    setRevealedHints(initialRevealedHints || {});
     setExpandedPatches({});
-  }, [plan.issue_number]);
+  }, [plan.issue_number, initialStepStatuses, initialRevealedHints]);
 
   const setStatus = (stepId: string, status: StepStatus) => {
-    setStepStatuses((prev) => ({ ...prev, [stepId]: status }));
+    setStepStatuses((prev) => {
+      const next = { ...prev, [stepId]: status };
+      onStepStatusesChange?.(next);
+      return next;
+    });
   };
 
   const toggleHint = (hintKey: string) => {
-    setRevealedHints((prev) => ({ ...prev, [hintKey]: !prev[hintKey] }));
+    setRevealedHints((prev) => {
+      const next = { ...prev, [hintKey]: !prev[hintKey] };
+      onRevealedHintsChange?.(next);
+      return next;
+    });
   };
 
   const togglePatch = (stepId: string) => {

@@ -15,6 +15,7 @@ from app.github_client import (
 )
 from app.guided_implementation import generate_guided_implementation_plan
 from app.learning import generate_issue_learning_brief
+from app.plan_signing import verify_execution_plan
 from app.planner import generate_first_pr_plan
 from app.providers import UnsupportedProviderError
 from app.rate_limit import rate_limit
@@ -357,12 +358,33 @@ async def analyze_verification_endpoint(request: VerificationAnalyzeRequest) -> 
 )
 async def execute_verification_endpoint(request: VerificationExecuteRequest) -> TestExecutionResult:
     """Execute an authorized test plan inside an isolated, disposable Docker container."""
+    # 1. Enforce explicit contributor authorization at the API boundary
+    if not request.authorized:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Execution rejected: Explicit contributor authorization was not confirmed.",
+        )
+
+    # 2. In live execution (non-demo), enforce cryptographic plan integrity
+    is_demo = request.demo or settings.DEMO_MODE
+    if not is_demo:
+        is_valid, reason = verify_execution_plan(
+            repo_url=request.repo_url,
+            issue_number=request.issue_number,
+            plan=request.execution_plan,
+        )
+        if not is_valid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Execution plan rejected: {reason}",
+            )
+
     try:
         return await execute_isolated_test_plan(
             plan=request.execution_plan,
             diff_text=request.diff_text,
             authorized=request.authorized,
-            demo=request.demo or False,
+            demo=is_demo,
         )
     except Exception as exc:
         request_id = str(uuid.uuid4())

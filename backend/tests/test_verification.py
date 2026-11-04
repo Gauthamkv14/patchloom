@@ -54,6 +54,12 @@ from app.test_runner import (
     execute_isolated_test_plan,
     is_command_allowlisted,
     parse_test_counts,
+    validate_diff_content,
+)
+from app.plan_signing import (
+    compute_plan_signature,
+    sign_execution_plan,
+    verify_execution_plan,
 )
 from app.verification import (
     create_deterministic_fallback_verification_report,
@@ -554,3 +560,388 @@ async def test_api_verification_prepare_pr_demo():
         data = response.json()
         assert data["title"] != ""
         assert len(data["manual_verification_checklist"]) > 0
+
+
+# ==============================================================================
+# 5. Security Remediation Regression Tests (Audit P0 & P1)
+# ==============================================================================
+
+def test_allowlist_bypass_regressions():
+    """Verify that all allowlist bypasses identified in the security audit are strictly rejected."""
+    # 1. npm subcommands
+    assert is_command_allowlisted("npm", ["run", "arbitrary_script"]) is False
+    assert is_command_allowlisted("npm", ["install"]) is False
+    assert is_command_allowlisted("npm", ["test", "--", "tests/foo.test.js"]) is True
+
+    # 2. python subcommands and arbitrary files
+    assert is_command_allowlisted("python", ["arbitrary.py"]) is False
+    assert is_command_allowlisted("python", ["-m", "http.server"]) is False
+    assert is_command_allowlisted("python", ["-m", "pytest", "tests/test_api.py"]) is True
+    assert is_command_allowlisted("python", ["-m", "unittest", "tests/test_api.py"]) is True
+
+    # 3. cargo subcommands
+    assert is_command_allowlisted("cargo", ["run"]) is False
+    assert is_command_allowlisted("cargo", ["test", "--test", "tests/foo.rs"]) is True
+
+    # 4. go subcommands
+    assert is_command_allowlisted("go", ["run", "main.go"]) is False
+    assert is_command_allowlisted("go", ["test", "./..."]) is True
+
+    # 5. npx subcommands
+    assert is_command_allowlisted("npx", ["evil-package"]) is False
+    assert is_command_allowlisted("npx", ["vitest", "run", "tests/foo.test.ts"]) is True
+    assert is_command_allowlisted("npx", ["jest", "tests/foo.test.js"]) is True
+
+    # 6. dangerous pytest configuration overrides
+    assert is_command_allowlisted("pytest", ["-o", "log_cli=true"]) is False
+    assert is_command_allowlisted("pytest", ["--override-ini=addopts=--help"]) is False
+
+    # 7. path traversal
+    assert is_command_allowlisted("pytest", ["../etc/passwd"]) is False
+    assert is_command_allowlisted("pytest", ["tests/../../secret.py"]) is False
+    assert is_command_allowlisted("pytest", ["/bin/sh"]) is False
+    assert is_command_allowlisted("pytest", ["C:\\Windows\\system32"]) is False
+
+    # 8. dangerous flags and interpreter code injection
+    assert is_command_allowlisted("pytest", ["-c", "import os; os.system('sh')"]) is False
+    assert is_command_allowlisted("pytest", ["--import", "malicious"]) is False
+    assert is_command_allowlisted("pytest", ["--eval", "malicious"]) is False
+
+
+def test_validate_diff_content_security():
+    """Verify that git diff validation strictly catches path traversal, symlinks, and absolute paths."""
+    # Safe diff
+    safe_diff = (
+        "diff --git a/tests/test_foo.py b/tests/test_foo.py\n"
+        "--- a/tests/test_foo.py\n"
+        "+++ b/tests/test_foo.py\n"
+        "@@ -1 +1 @@\n"
+        "+assert True\n"
+    )
+    ok, msg = validate_diff_content(safe_diff)
+    assert ok is True
+
+    # Path traversal in diff header
+    traversal_diff = (
+        "diff --git a/../secret.py b/../secret.py\n"
+        "--- a/../secret.py\n"
+        "+++ b/../secret.py\n"
+    )
+    ok, msg = validate_diff_content(traversal_diff)
+    assert ok is False
+    assert "path traversal" in msg.lower()
+
+    # Symlink creation
+    symlink_diff = (
+        "diff --git a/link b/link\n"
+        "new file mode 120000\n"
+        "--- /dev/null\n"
+        "+++ b/link\n"
+        "@@ -0,0 +1 @@\n"
+        "+/etc/passwd\n"
+    )
+    ok, msg = validate_diff_content(symlink_diff)
+    assert ok is False
+    assert "symbolic link" in msg.lower()
+
+    # Absolute path in header
+    abs_diff = (
+        "diff --git a//etc/passwd b//etc/passwd\n"
+        "--- /etc/passwd\n"
+        "+++ /etc/passwd\n"
+    )
+    ok, msg = validate_diff_content(abs_diff)
+    assert ok is False
+
+
+def test_plan_hmac_signing_and_verification():
+    """Verify HMAC-SHA256 signature binding, tampering rejection, expiry, missing secret, and multi-worker consistency."""
+    secret = "test_verification_secret_12345"
+    plan = TestExecutionPlan(
+        test_runner="pytest",
+        command="pytest",
+        arguments=["tests/test_requests.py"],
+        working_dir=".",
+        timeout_seconds=30,
+        is_allowlisted=True,
+    )
+    repo_url = "https://github.com/psf/requests"
+    issue_number = 6542
+
+    # 1. Missing Secret: When no signing secret is configured, live execution is strictly disabled
+    with patch("app.plan_signing.settings.EXECUTION_SIGNING_SECRET", None):
+        is_valid, reason = verify_execution_plan(repo_url, issue_number, plan, secret=None)
+        assert is_valid is False
+        assert "EXECUTION_SIGNING_SECRET is not configured" in reason
+
+    # 2. Sign plan with configured secret
+    signed_plan = sign_execution_plan(repo_url, issue_number, plan, ttl_seconds=600, secret=secret)
+    assert signed_plan.signature is not None
+    assert signed_plan.expires_at is not None
+
+    # 3. Multi-worker / Restart consistency: Independent sign calls produce identical signatures
+    worker2_signature = compute_plan_signature(repo_url, issue_number, signed_plan, secret=secret)
+    assert signed_plan.signature == worker2_signature
+
+    # 4. Verify unmodified plan
+    is_valid, reason = verify_execution_plan(repo_url, issue_number, signed_plan, secret=secret)
+    assert is_valid is True
+
+    # 5. Tampered command
+    tampered_cmd_plan = signed_plan.model_copy(update={"command": "npm test"})
+    is_valid, reason = verify_execution_plan(repo_url, issue_number, tampered_cmd_plan, secret=secret)
+    assert is_valid is False
+    assert "invalid" in reason.lower()
+
+    # 6. Tampered arguments
+    tampered_args_plan = signed_plan.model_copy(update={"arguments": ["tests/other.py"]})
+    is_valid, reason = verify_execution_plan(repo_url, issue_number, tampered_args_plan, secret=secret)
+    assert is_valid is False
+
+    # 7. Transposed issue number
+    is_valid, reason = verify_execution_plan(repo_url, 9999, signed_plan, secret=secret)
+    assert is_valid is False
+
+    # 8. Transposed repo URL
+    is_valid, reason = verify_execution_plan("https://github.com/other/repo", issue_number, signed_plan, secret=secret)
+    assert is_valid is False
+
+    # 9. Expired plan
+    expired_plan = signed_plan.model_copy(update={"expires_at": "2020-01-01T00:00:00+00:00"})
+    is_valid, reason = verify_execution_plan(repo_url, issue_number, expired_plan, secret=secret)
+    assert is_valid is False
+    assert "expired" in reason.lower()
+
+    # 10. Missing signature
+    unsigned_plan = signed_plan.model_copy(update={"signature": None})
+    is_valid, reason = verify_execution_plan(repo_url, issue_number, unsigned_plan, secret=secret)
+    assert is_valid is False
+
+
+@pytest.mark.asyncio
+async def test_api_verification_execute_rejects_unauthorized():
+    """Verify that unauthorized test execution is strictly rejected at the API boundary with HTTP 400."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/api/verification/execute",
+            json={
+                "repo_url": "https://github.com/psf/requests",
+                "issue_number": 6542,
+                "execution_plan": {
+                    "test_runner": "pytest",
+                    "command": "pytest",
+                    "arguments": ["tests/test_requests.py"],
+                    "working_dir": ".",
+                    "timeout_seconds": 30,
+                    "is_allowlisted": True,
+                    "disclaimer": "Test plan",
+                },
+                "authorized": False,  # Explicit unauthorized
+                "demo": False,
+            },
+        )
+        assert response.status_code == 400
+        assert "Explicit contributor authorization was not confirmed" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_api_verification_execute_rejects_forged_or_unsigned_plan_in_live_mode():
+    """Verify that unverified or tampered plans in live mode are rejected with HTTP 400."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/api/verification/execute",
+            json={
+                "repo_url": "https://github.com/psf/requests",
+                "issue_number": 6542,
+                "execution_plan": {
+                    "test_runner": "pytest",
+                    "command": "pytest",
+                    "arguments": ["tests/test_requests.py"],
+                    "working_dir": ".",
+                    "timeout_seconds": 30,
+                    "is_allowlisted": True,
+                    "disclaimer": "Test plan",
+                    "signature": "forged_signature_12345",
+                    "expires_at": "2026-12-31T23:59:59+00:00",
+                },
+                "authorized": True,
+                "demo": False,
+            },
+        )
+        assert response.status_code == 400
+        assert "Execution plan rejected" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_container_lifecycle_and_timeout_cleanup(tmp_path):
+    """Verify unique container naming, timeout docker kill, and forced docker rm in cleanup."""
+    import asyncio
+
+    (tmp_path / ".provisioned").touch()
+    plan = TestExecutionPlan(
+        test_runner="pytest",
+        command="pytest",
+        arguments=["tests/test_requests.py"],
+        working_dir=".",
+        timeout_seconds=5,
+        is_allowlisted=True,
+    )
+    signed_plan = sign_execution_plan("https://github.com/psf/requests", 6542, plan, secret="test_secret")
+
+    mock_run_proc = AsyncMock()
+    mock_run_proc.communicate = AsyncMock(side_effect=asyncio.TimeoutError())
+    mock_run_proc.kill = MagicMock()
+    mock_run_proc.wait = AsyncMock()
+
+    mock_kill_proc = AsyncMock()
+    mock_kill_proc.communicate = AsyncMock(return_value=(b"", b""))
+
+    mock_rm_proc = AsyncMock()
+    mock_rm_proc.communicate = AsyncMock(return_value=(b"", b""))
+
+    calls = []
+
+    def mock_subprocess(*args, **kwargs):
+        calls.append(list(args))
+        if len(args) > 1 and args[1] == "kill":
+            return mock_kill_proc
+        elif len(args) > 1 and args[1] == "rm":
+            return mock_rm_proc
+        return mock_run_proc
+
+    with patch("app.test_runner.check_docker_availability", return_value=(True, "Docker daemon running")):
+        with patch("asyncio.create_subprocess_exec", side_effect=mock_subprocess):
+            res = await execute_isolated_test_plan(
+                plan=signed_plan,
+                authorized=True,
+                demo=False,
+                workspace_dir=str(tmp_path),
+            )
+            assert res.status == "timed_out"
+            assert "Container patchloom_test_" in res.stderr_bounded
+
+            # Verify docker kill and docker rm were called
+            kill_calls = [c for c in calls if len(c) > 1 and c[1] == "kill"]
+            rm_calls = [c for c in calls if len(c) > 1 and c[1] == "rm"]
+            assert len(kill_calls) >= 1
+            assert len(rm_calls) >= 1
+            assert kill_calls[0][0] == "docker"
+            assert rm_calls[0][0] == "docker"
+            assert kill_calls[0][2].startswith("patchloom_test_")
+            assert rm_calls[0][3].startswith("patchloom_test_")
+
+
+@pytest.mark.asyncio
+async def test_docker_command_hardening_flags(tmp_path):
+    """Verify that all required Docker hardening flags are present in container execution."""
+    (tmp_path / ".provisioned").touch()
+    plan = TestExecutionPlan(
+        test_runner="pytest",
+        command="pytest",
+        arguments=["tests/test_requests.py"],
+        working_dir=".",
+        timeout_seconds=10,
+        is_allowlisted=True,
+    )
+
+    captured_cmds = []
+    mock_proc = AsyncMock()
+    mock_proc.communicate = AsyncMock(return_value=(b"=== 1 passed in 0.1s ===", b""))
+    mock_proc.returncode = 0
+
+    def mock_subprocess(*args, **kwargs):
+        captured_cmds.append(list(args))
+        return mock_proc
+
+    with patch("app.test_runner.check_docker_availability", return_value=(True, "Docker daemon running")):
+        with patch("asyncio.create_subprocess_exec", side_effect=mock_subprocess):
+            res = await execute_isolated_test_plan(
+                plan=plan,
+                authorized=True,
+                demo=False,
+                workspace_dir=str(tmp_path),
+            )
+            assert res.status == "passed"
+            run_cmd = captured_cmds[0]
+            # Verify all hardening flags are present
+            assert "--read-only" in run_cmd
+            assert "--security-opt" in run_cmd and "no-new-privileges:true" in run_cmd
+            assert "--network" in run_cmd and "none" in run_cmd
+            assert "--cap-drop" in run_cmd and "ALL" in run_cmd
+            assert "-u" in run_cmd and "10001:10001" in run_cmd
+            assert "--cpus=1.0" in run_cmd
+            assert "--memory=512m" in run_cmd
+            assert "--memory-swap=512m" in run_cmd
+            assert "--pids-limit=64" in run_cmd
+            assert any("/tmp:rw,noexec,nosuid,size=64m" in arg for arg in run_cmd)
+
+
+@pytest.mark.asyncio
+async def test_runner_tooling_absence_fails_closed(tmp_path):
+    """Verify that runners fail closed as execution_unavailable when tooling or workspace is absent."""
+    # 1. Pytest tooling is absent from python:3.13-slim runtime image
+    pytest_plan = TestExecutionPlan(
+        test_runner="pytest",
+        command="pytest",
+        arguments=["tests/test_requests.py"],
+        working_dir=".",
+        timeout_seconds=30,
+        is_allowlisted=True,
+    )
+    with patch("app.test_runner.check_docker_availability", return_value=(True, "Docker daemon running")):
+        res = await execute_isolated_test_plan(
+            plan=pytest_plan,
+            authorized=True,
+            demo=False,
+            workspace_dir=str(tmp_path),  # No .provisioned marker
+        )
+        assert res.status == "execution_unavailable"
+        assert any("absent from runtime image" in f for f in res.failure_details)
+
+    # 2. Vitest tooling is absent from node:22-alpine runtime image
+    vitest_plan = TestExecutionPlan(
+        test_runner="vitest",
+        command="npx vitest run",
+        arguments=["tests/foo.test.ts"],
+        working_dir=".",
+        timeout_seconds=30,
+        is_allowlisted=True,
+    )
+    with patch("app.test_runner.check_docker_availability", return_value=(True, "Docker daemon running")):
+        res = await execute_isolated_test_plan(
+            plan=vitest_plan,
+            authorized=True,
+            demo=False,
+            workspace_dir=str(tmp_path),
+        )
+        assert res.status == "execution_unavailable"
+        assert any("absent from runtime image" in f for f in res.failure_details)
+
+    # 3. Unittest has tooling in stdlib, but workspace is not supplied
+    unittest_plan = TestExecutionPlan(
+        test_runner="python_unittest",
+        command="python",
+        arguments=["-m", "unittest", "tests/test_requests.py"],
+        working_dir=".",
+        timeout_seconds=30,
+        is_allowlisted=True,
+    )
+    with patch("app.test_runner.check_docker_availability", return_value=(True, "Docker daemon running")):
+        res = await execute_isolated_test_plan(
+            plan=unittest_plan,
+            authorized=True,
+            demo=False,
+            workspace_dir=None,  # No workspace supplied
+        )
+        assert res.status == "execution_unavailable"
+        assert any("workspace is unavailable" in f.lower() for f in res.failure_details)
+
+
+def test_live_docker_honesty():
+    """Verify live Docker daemon check; skip honestly with diagnostic if daemon is offline."""
+    docker_available, diag = check_docker_availability()
+    if not docker_available:
+        pytest.skip(f"Docker daemon is not reachable on host ({diag}); live test skipped honestly.")
+    assert docker_available is True
